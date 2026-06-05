@@ -3,6 +3,7 @@ pub const rng = @import("rng.zig");
 pub const ids = @import("ids.zig");
 pub const input = @import("input.zig");
 pub const render = @import("render.zig");
+pub const game_mode = @import("game_mode.zig");
 pub const State = @import("state.zig").State;
 
 pub const world = struct {

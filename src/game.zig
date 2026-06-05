@@ -23,7 +23,10 @@ pub const Game = struct {
                 try self.state.log.add("You wait.");
                 try turn.endPlayerTurn(&self.state);
             },
-            .quit => self.state.quit_requested = true,
+            .quit => {
+                self.state.quit_requested = true;
+                self.state.current_mode = .game_over;
+            },
             .none => try self.state.log.add("Unknown command."),
         }
     }

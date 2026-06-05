@@ -5,6 +5,9 @@ const map_mod = @import("world/map.zig");
 const player_mod = @import("entities/player.zig");
 const enemy_mod = @import("entities/enemy.zig");
 const log_mod = @import("ui/log.zig");
+const game_mode_mod = @import("game_mode.zig");
+
+pub const GameMode = game_mode_mod.GameMode;
 
 pub const State = struct {
     allocator: std.mem.Allocator,
@@ -15,6 +18,7 @@ pub const State = struct {
     turn_count: u64,
     log: log_mod.MessageLog,
     quit_requested: bool,
+    current_mode: GameMode = .running,
 
     pub fn init(allocator: std.mem.Allocator) State {
         return .{
