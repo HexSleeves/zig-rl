@@ -34,9 +34,9 @@ pub const Rng = struct {
         return self.random().uintLessThan(T, max);
     }
 
-    /// Returns a random value of type T in [min, max).
+    /// Returns a random value of type T in [min, max). Handles both signed and unsigned T.
     pub fn nextRange(self: *Rng, comptime T: type, min: T, max: T) T {
-        return min + self.random().uintLessThan(T, max - min);
+        return self.random().intRangeLessThan(T, min, max);
     }
 };
 
