@@ -28,3 +28,8 @@ pub const ui = struct {
     pub const hud = @import("ui/hud.zig");
     pub const log = @import("ui/log.zig");
 };
+
+pub const stores = struct {
+    pub const actor_store = @import("stores/actor_store.zig");
+    pub const item_store = @import("stores/item_store.zig");
+};
