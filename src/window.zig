@@ -63,6 +63,8 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
     var input_state = InputState{};
     var frames_rendered: u32 = 0;
     var show_debug_panel: bool = true;
+    var last_frame_time: f64 = zglfw.getTime();
+    var fps: f32 = 0.0;
 
     while (!window.shouldClose() and !game.state.quit_requested) {
         zglfw.pollEvents();
@@ -80,10 +82,15 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
         const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
-        drawGame(game, l, show_debug_panel);
+        drawGame(game, l, show_debug_panel, fps);
         zgui.backend.draw();
 
         window.swapBuffers();
+
+        const now = zglfw.getTime();
+        const dt = now - last_frame_time;
+        if (dt > 0.0) fps = @floatCast(1.0 / dt);
+        last_frame_time = now;
 
         frames_rendered += 1;
         if (smoke_frame_limit) |smoke_frames| {
@@ -125,14 +132,14 @@ fn pressedOne(window: *zglfw.Window, previous: *bool, key: zglfw.Key) bool {
     return current and !previous.*;
 }
 
-fn drawGame(game: *const Game, l: render.Layout, show_debug: bool) void {
+fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, fps: f32) void {
     zgui.pushFont(null, base_font_size * l.scale);
     defer zgui.popFont();
 
     drawMap(game, l);
     drawHud(game, l);
     drawLog(game, l);
-    if (show_debug) drawDebug(game);
+    if (show_debug) drawDebug(game, fps);
 }
 
 fn drawHud(game: *const Game, l: render.Layout) void {
@@ -223,7 +230,7 @@ fn drawLog(game: *const Game, l: render.Layout) void {
     zgui.end();
 }
 
-fn drawDebug(game: *const Game) void {
+fn drawDebug(game: *const Game, fps: f32) void {
     const run_state = &game.state.run;
     const actor_count = run_state.actors.enemyCount() + 1; // +1 for player
     if (zgui.begin("Debug", .{ .flags = .{ .no_saved_settings = true } })) {
@@ -232,7 +239,7 @@ fn drawDebug(game: *const Game) void {
         zgui.text("Actors: {d}", .{actor_count});
         zgui.text("Turn:   {d}", .{run_state.turn_count});
         zgui.text("Mode:   {s}", .{@tagName(game.state.current_mode)});
-        zgui.text("FPS:    {d:.1}", .{60.0});
+        zgui.text("FPS:    {d:.1}", .{fps});
     }
     zgui.end();
 }
