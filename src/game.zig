@@ -7,8 +7,8 @@ pub const Game = struct {
     state: State,
 
     pub fn init(allocator: anytype) !Game {
-        var game = Game{ .state = State.init(allocator) };
-        try game.state.log.add("Explore the starter dungeon.");
+        var game = Game{ .state = try State.init(allocator) };
+        try game.state.run.log.add("Explore the starter dungeon.");
         return game;
     }
 
@@ -20,14 +20,14 @@ pub const Game = struct {
         switch (command) {
             .move => |direction| _ = try movement.tryMovePlayer(&self.state, direction),
             .wait => {
-                try self.state.log.add("You wait.");
+                try self.state.run.log.add("You wait.");
                 try turn.endPlayerTurn(&self.state);
             },
             .quit => {
                 self.state.quit_requested = true;
                 self.state.current_mode = .game_over;
             },
-            .none => try self.state.log.add("Unknown command."),
+            .none => try self.state.run.log.add("Unknown command."),
         }
     }
 };

@@ -130,7 +130,7 @@ fn drawHud(game: *const Game, l: render.Layout) void {
         zgui.sameLine(.{});
         zgui.textDisabled("WASD/HJKL/arrows move   . waits   Q/Esc quits", .{});
         zgui.sameLine(.{ .spacing = 32 });
-        zgui.text("Turn {d}", .{game.state.turn_count});
+        zgui.text("Turn {d}", .{game.state.run.turn_count});
     }
     zgui.end();
 }
@@ -144,12 +144,12 @@ fn drawMap(game: *const Game, l: render.Layout) void {
     });
 
     var y: usize = 0;
-    while (y < game.state.map.height) : (y += 1) {
+    while (y < game.state.run.map.height) : (y += 1) {
         var x: usize = 0;
-        while (x < game.state.map.width) : (x += 1) {
+        while (x < game.state.run.map.width) : (x += 1) {
             const px = l.map_origin_x + @as(i32, @intCast(x)) * l.tile_size;
             const py = l.map_origin_y + @as(i32, @intCast(y)) * l.tile_size;
-            const color = switch (game.state.map.get(x, y).kind) {
+            const color = switch (game.state.run.map.get(x, y).kind) {
                 .wall => palette.wall,
                 .floor => palette.floor,
             };
@@ -157,15 +157,13 @@ fn drawMap(game: *const Game, l: render.Layout) void {
         }
     }
 
-    var i: usize = 0;
-    while (i < game.state.enemy_count) : (i += 1) {
-        const enemy = game.state.enemies[i];
+    for (game.state.run.actors.enemiesSlice()) |enemy| {
         if (enemy.alive) {
             drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, "g");
         }
     }
 
-    drawActor(draw_list, game.state.player.position.x, game.state.player.position.y, l, palette.player, "@");
+    drawActor(draw_list, game.state.run.player.position.x, game.state.run.player.position.y, l, palette.player, "@");
 }
 
 fn drawTile(draw_list: zgui.DrawList, x: i32, y: i32, size: i32, color: u32) void {
@@ -205,8 +203,8 @@ fn drawLog(game: *const Game, l: render.Layout) void {
     if (zgui.begin("Messages", .{ .flags = fixedPanelFlags() })) {
         zgui.textColored(colorFloats(palette.text), "Messages", .{});
         var i: usize = 0;
-        while (i < game.state.log.count()) : (i += 1) {
-            zgui.textColored(colorFloats(palette.muted), "- {s}", .{game.state.log.at(i)});
+        while (i < game.state.run.log.count()) : (i += 1) {
+            zgui.textColored(colorFloats(palette.muted), "- {s}", .{game.state.run.log.at(i)});
         }
     }
     zgui.end();

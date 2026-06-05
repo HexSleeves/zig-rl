@@ -18,37 +18,37 @@ test "starter dungeon has fixed dimensions, boundary walls, and walkable player 
 }
 
 test "player movement respects walls and advances turns only for valid movement" {
-    var state = State.init(std.testing.allocator);
+    var state = try State.init(std.testing.allocator);
     defer state.deinit();
 
-    try std.testing.expectEqual(@as(i32, config.player_start_x), state.player.position.x);
-    try std.testing.expectEqual(@as(u64, 0), state.turn_count);
+    try std.testing.expectEqual(@as(i32, config.player_start_x), state.run.player.position.x);
+    try std.testing.expectEqual(@as(u64, 0), state.run.turn_count);
 
     const hit_wall = try movement.tryMovePlayer(&state, .west);
     try std.testing.expectEqual(movement.MoveResult.blocked, hit_wall);
-    try std.testing.expectEqual(@as(i32, config.player_start_x), state.player.position.x);
-    try std.testing.expectEqual(@as(u64, 0), state.turn_count);
+    try std.testing.expectEqual(@as(i32, config.player_start_x), state.run.player.position.x);
+    try std.testing.expectEqual(@as(u64, 0), state.run.turn_count);
 
     const moved = try movement.tryMovePlayer(&state, .east);
     try std.testing.expectEqual(movement.MoveResult.moved, moved);
-    try std.testing.expectEqual(@as(i32, config.player_start_x + 1), state.player.position.x);
-    try std.testing.expectEqual(@as(u64, 1), state.turn_count);
+    try std.testing.expectEqual(@as(i32, config.player_start_x + 1), state.run.player.position.x);
+    try std.testing.expectEqual(@as(u64, 1), state.run.turn_count);
 }
 
 test "message log keeps the newest entries within capacity" {
-    var state = State.init(std.testing.allocator);
+    var state = try State.init(std.testing.allocator);
     defer state.deinit();
 
-    try state.log.add("first");
-    try state.log.add("second");
-    try state.log.add("third");
-    try state.log.add("fourth");
-    try state.log.add("fifth");
-    try state.log.add("sixth");
+    try state.run.log.add("first");
+    try state.run.log.add("second");
+    try state.run.log.add("third");
+    try state.run.log.add("fourth");
+    try state.run.log.add("fifth");
+    try state.run.log.add("sixth");
 
-    try std.testing.expectEqual(@as(usize, config.max_log_messages), state.log.count());
-    try std.testing.expectEqualStrings("second", state.log.at(0));
-    try std.testing.expectEqualStrings("sixth", state.log.at(state.log.count() - 1));
+    try std.testing.expectEqual(@as(usize, config.max_log_messages), state.run.log.count());
+    try std.testing.expectEqualStrings("second", state.run.log.at(0));
+    try std.testing.expectEqualStrings("sixth", state.run.log.at(state.run.log.count() - 1));
 }
 
 test "native window layout fits the map plus HUD and message log" {

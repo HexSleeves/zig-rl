@@ -24,13 +24,13 @@ pub const MoveResult = enum {
 };
 
 pub fn tryMovePlayer(state: *State, direction: Direction) !MoveResult {
-    const next = state.player.position.translated(direction.delta());
-    if (state.map.isBlockedAt(next.x, next.y)) {
-        try state.log.add("You run into a wall.");
+    const next = state.run.player.position.translated(direction.delta());
+    if (state.run.map.isBlockedAt(next.x, next.y)) {
+        try state.run.log.add("You run into a wall.");
         return .blocked;
     }
 
-    state.player.position = next;
+    state.run.player.position = next;
     try turn.endPlayerTurn(state);
     return .moved;
 }
