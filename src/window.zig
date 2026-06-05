@@ -33,6 +33,7 @@ const InputState = struct {
     east: bool = false,
     wait: bool = false,
     quit: bool = false,
+    debug_toggle: bool = false,
 };
 
 pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
@@ -61,11 +62,15 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
     var input_state = InputState{};
     var frames_rendered: u32 = 0;
+    var show_debug_panel: bool = true;
 
     while (!window.shouldClose() and !game.state.quit_requested) {
         zglfw.pollEvents();
         if (readCommand(window, &input_state)) |command| {
             try game.handle(command);
+        }
+        if (pressedOne(window, &input_state.debug_toggle, .F1)) {
+            show_debug_panel = !show_debug_panel;
         }
 
         const fb_size = window.getFramebufferSize();
@@ -75,7 +80,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
         const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
-        drawGame(game, l);
+        drawGame(game, l, show_debug_panel);
         zgui.backend.draw();
 
         window.swapBuffers();
@@ -113,13 +118,21 @@ fn pressedAny(window: *zglfw.Window, previous: *bool, keys: []const zglfw.Key) b
     return current and !previous.*;
 }
 
-fn drawGame(game: *const Game, l: render.Layout) void {
+fn pressedOne(window: *zglfw.Window, previous: *bool, key: zglfw.Key) bool {
+    const action = window.getKey(key);
+    const current = action == .press or action == .repeat;
+    defer previous.* = current;
+    return current and !previous.*;
+}
+
+fn drawGame(game: *const Game, l: render.Layout, show_debug: bool) void {
     zgui.pushFont(null, base_font_size * l.scale);
     defer zgui.popFont();
 
     drawMap(game, l);
     drawHud(game, l);
     drawLog(game, l);
+    if (show_debug) drawDebug(game);
 }
 
 fn drawHud(game: *const Game, l: render.Layout) void {
@@ -206,6 +219,20 @@ fn drawLog(game: *const Game, l: render.Layout) void {
         while (i < game.state.run.log.count()) : (i += 1) {
             zgui.textColored(colorFloats(palette.muted), "- {s}", .{game.state.run.log.at(i)});
         }
+    }
+    zgui.end();
+}
+
+fn drawDebug(game: *const Game) void {
+    const run_state = &game.state.run;
+    const actor_count = run_state.actors.enemyCount() + 1; // +1 for player
+    if (zgui.begin("Debug", .{ .flags = .{ .no_saved_settings = true } })) {
+        zgui.text("Seed:   {d}", .{run_state.run_seed});
+        zgui.text("Floor:  {d}", .{run_state.current_floor});
+        zgui.text("Actors: {d}", .{actor_count});
+        zgui.text("Turn:   {d}", .{run_state.turn_count});
+        zgui.text("Mode:   {s}", .{@tagName(game.state.current_mode)});
+        zgui.text("FPS:    {d:.1}", .{60.0});
     }
     zgui.end();
 }
