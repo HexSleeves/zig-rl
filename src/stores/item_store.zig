@@ -2,8 +2,6 @@ const std = @import("std");
 const ids = @import("../ids.zig");
 const config = @import("../config.zig");
 
-pub const max_items: usize = 64;
-
 /// Fixed-capacity store for items. Stub for Milestone 5.
 pub const ItemStore = struct {
     count: usize,

@@ -20,18 +20,18 @@ pub const ActorStore = struct {
 
     /// Get enemy by ActorId. Returns null if id is invalid or out of range.
     /// Enemy ActorIds start at 1; index into enemies array is id.value - 1.
+    /// Returned pointer valid only while ActorStore is not mutated
     pub fn getEnemy(self: *const ActorStore, id: ids.ActorId) ?*const enemy_mod.Enemy {
-        if (!id.isValid()) return null;
-        if (id.value == 0) return null; // 0 is player
+        if (id.value == 0 or !id.isValid()) return null;
         const idx = id.value - 1;
         if (idx >= self.enemy_count) return null;
         return &self.enemies[idx];
     }
 
     /// Get mutable enemy by ActorId.
+    /// Returned pointer valid only while ActorStore is not mutated
     pub fn getEnemyMut(self: *ActorStore, id: ids.ActorId) ?*enemy_mod.Enemy {
-        if (!id.isValid()) return null;
-        if (id.value == 0) return null; // 0 is player
+        if (id.value == 0 or !id.isValid()) return null;
         const idx = id.value - 1;
         if (idx >= self.enemy_count) return null;
         return &self.enemies[idx];
@@ -54,7 +54,7 @@ pub const ActorStore = struct {
     }
 
     /// Returns a slice of enemies 0..enemy_count.
-    pub fn enemies_slice(self: *const ActorStore) []const enemy_mod.Enemy {
+    pub fn enemiesSlice(self: *const ActorStore) []const enemy_mod.Enemy {
         return self.enemies[0..self.enemy_count];
     }
 
@@ -143,4 +143,11 @@ test "ActorStore at capacity addEnemy returns null" {
     // Now at capacity — next add must return null
     const overflow = store.addEnemy(enemy);
     try std.testing.expect(overflow == null);
+}
+
+test "enemiesSlice length matches enemyCount" {
+    var store = ActorStore.init();
+    _ = store.addEnemy(.{ .position = .{ .x = 1, .y = 1 }, .glyph = 'g', .name = "goblin", .alive = true });
+    _ = store.addEnemy(.{ .position = .{ .x = 2, .y = 2 }, .glyph = 'o', .name = "orc", .alive = true });
+    try std.testing.expectEqual(store.enemyCount(), store.enemiesSlice().len);
 }
