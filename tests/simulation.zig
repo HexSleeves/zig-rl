@@ -60,6 +60,15 @@ test "native window layout fits the map plus HUD and message log" {
     try std.testing.expect(layout.window_height > layout.map_height_pixels);
 }
 
+test "native window layout scales for high density framebuffers" {
+    const layout = render.layoutForScale(2);
+
+    try std.testing.expectEqual(@as(i32, @intCast(config.tile_size_pixels * 2)), layout.tile_size);
+    try std.testing.expectEqual(@as(i32, @intCast(config.map_width * config.tile_size_pixels * 2)), layout.map_width_pixels);
+    try std.testing.expectEqual(layout.map_width_pixels + layout.padding * 2, layout.window_width);
+    try std.testing.expectEqual(layout.map_origin_y + layout.map_height_pixels + layout.log_height + layout.padding, layout.window_height);
+}
+
 test "native renderer is backed by zig-gamedev libraries" {
     try std.testing.expectEqualStrings("zig-gamedev/zglfw+zopengl+zgui", render.backend_name);
 }

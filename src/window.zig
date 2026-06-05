@@ -9,6 +9,8 @@ const input = @import("input.zig");
 const render = @import("render.zig");
 
 const gl = zopengl.bindings;
+const base_font_size: f32 = 13.0;
+const actor_font_size: f32 = 16.0;
 
 const Palette = struct {
     background: u32 = 0xff181412,
@@ -43,8 +45,8 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
     zglfw.windowHint(.opengl_forward_compat, true);
     zglfw.windowHint(.resizable, false);
 
-    const l = render.layout();
-    const window = try zglfw.Window.create(l.window_width, l.window_height, "zig-rl", null, null);
+    const base_layout = render.layout();
+    const window = try zglfw.Window.create(base_layout.window_width, base_layout.window_height, "zig-rl", null, null);
     defer window.destroy();
 
     zglfw.makeContextCurrent(window);
@@ -72,6 +74,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
         gl.clear(gl.COLOR_BUFFER_BIT);
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
+        const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
         drawGame(game, l);
         zgui.backend.draw();
 
@@ -82,6 +85,12 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
             if (frames_rendered >= smoke_frames) break;
         }
     }
+}
+
+fn framebufferScale(base_layout: render.Layout, fb_size: [2]c_int) f32 {
+    const x_scale = @as(f32, @floatFromInt(fb_size[0])) / @as(f32, @floatFromInt(base_layout.window_width));
+    const y_scale = @as(f32, @floatFromInt(fb_size[1])) / @as(f32, @floatFromInt(base_layout.window_height));
+    return @max(1.0, @min(x_scale, y_scale));
 }
 
 fn readCommand(window: *zglfw.Window, state: *InputState) ?input.Command {
@@ -105,6 +114,9 @@ fn pressedAny(window: *zglfw.Window, previous: *bool, keys: []const zglfw.Key) b
 }
 
 fn drawGame(game: *const Game, l: render.Layout) void {
+    zgui.pushFont(null, base_font_size * l.scale);
+    defer zgui.popFont();
+
     drawMap(game, l);
     drawHud(game, l);
     drawLog(game, l);
@@ -172,17 +184,19 @@ fn drawTile(draw_list: zgui.DrawList, x: i32, y: i32, size: i32, color: u32) voi
 fn drawActor(draw_list: zgui.DrawList, x: i32, y: i32, l: render.Layout, color: u32, label: []const u8) void {
     const px = l.map_origin_x + x * l.tile_size;
     const py = l.map_origin_y + y * l.tile_size;
-    const inset = 4;
+    const inset = scaledPixels(4, l.scale);
     draw_list.addRectFilled(.{
         .pmin = .{ @floatFromInt(px + inset), @floatFromInt(py + inset) },
         .pmax = .{ @floatFromInt(px + l.tile_size - inset), @floatFromInt(py + l.tile_size - inset) },
         .col = color,
-        .rounding = 5.0,
+        .rounding = 5.0 * l.scale,
     });
-    draw_list.addTextUnformatted(.{
-        @floatFromInt(px + 8),
-        @floatFromInt(py + 4),
-    }, palette.background, label);
+    draw_list.addTextExtendedUnformatted(
+        .{ @floatFromInt(px + scaledPixels(8, l.scale)), @floatFromInt(py + scaledPixels(4, l.scale)) },
+        palette.background,
+        label,
+        .{ .font = null, .font_size = actor_font_size * l.scale },
+    );
 }
 
 fn drawLog(game: *const Game, l: render.Layout) void {
@@ -215,4 +229,8 @@ fn colorFloats(color: u32) [4]f32 {
     const b: f32 = @floatFromInt((color >> 16) & 0xff);
     const a: f32 = @floatFromInt((color >> 24) & 0xff);
     return .{ r / 255.0, g / 255.0, b / 255.0, a / 255.0 };
+}
+
+fn scaledPixels(value: i32, scale: f32) i32 {
+    return @intFromFloat(@round(@as(f32, @floatFromInt(value)) * scale));
 }
