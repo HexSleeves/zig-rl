@@ -1,4 +1,5 @@
 pub const config = @import("config.zig");
+pub const rng = @import("rng.zig");
 pub const ids = @import("ids.zig");
 pub const input = @import("input.zig");
 pub const render = @import("render.zig");
