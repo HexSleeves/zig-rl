@@ -159,7 +159,7 @@ fn drawMap(game: *const Game, l: render.Layout) void {
 
     for (game.state.run.actors.enemiesSlice()) |enemy| {
         if (enemy.alive) {
-            drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, "g");
+            drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, &[_]u8{enemy.glyph});
         }
     }
 
