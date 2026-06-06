@@ -2,6 +2,7 @@ const State = @import("state.zig").State;
 const input = @import("input.zig");
 const actions = @import("actions.zig");
 const ids = @import("ids.zig");
+const turn = @import("systems/turn.zig");
 
 pub const Game = struct {
     state: State,
@@ -35,5 +36,15 @@ pub const Game = struct {
 
         // Deduct energy from the player after acting
         self.state.run.scheduler.deductCost(ids.player_actor_id, actions.costOf(action));
+
+        // Run enemy turns until player can act
+        while (!self.state.run.scheduler.canAct(ids.player_actor_id)) {
+            const actor_id = self.state.run.scheduler.nextActor();
+            if (actor_id.eql(ids.player_actor_id)) break; // player's turn
+
+            // Enemy takes a wait action (real AI in Milestone 2)
+            try turn.endActorTurn(&self.state.run, actor_id);
+            self.state.run.scheduler.deductCost(actor_id, actions.ActionCost.wait);
+        }
     }
 };
