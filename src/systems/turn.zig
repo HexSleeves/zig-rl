@@ -50,7 +50,8 @@ pub fn endActorTurn(run: *RunState, actor_id: ids.ActorId) !u32 {
         },
     };
 
-    // TODO(M2-status): tick status effects (stunned, bleeding) when StatusSet is added to Enemy
+    // Tick status effects (decrements all active durations by 1)
+    enemy.status.tick();
 
     return cost;
 }
