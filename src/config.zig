@@ -23,6 +23,6 @@ pub const ui_gap: i32 = 8;
 pub const ui_header_h: i32 = 40;
 pub const ui_sidebar_w: i32 = 200;
 pub const ui_inspect_w: i32 = 200;
-pub const ui_log_h: i32 = 120;
+pub const ui_log_h: i32 = 172;
 pub const ui_viewport_tiles_w: i32 = 32;
 pub const ui_viewport_tiles_h: i32 = 22;
