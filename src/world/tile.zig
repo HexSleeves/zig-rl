@@ -5,13 +5,14 @@ pub const TileKind = enum {
 
 pub const Tile = struct {
     kind: TileKind,
+    blocks_sight: bool,
 
     pub fn wall() Tile {
-        return .{ .kind = .wall };
+        return .{ .kind = .wall, .blocks_sight = true };
     }
 
     pub fn floor() Tile {
-        return .{ .kind = .floor };
+        return .{ .kind = .floor, .blocks_sight = false };
     }
 
     pub fn blocksMovement(self: Tile) bool {
