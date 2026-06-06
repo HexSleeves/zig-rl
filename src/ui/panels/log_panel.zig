@@ -18,16 +18,18 @@ fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
     return false;
 }
 
-pub fn draw_log(dl: draw.DrawList, run: *const RunState, area: layout.Rect) void {
+pub fn draw_log(dl: draw.DrawList, run: *const RunState, area: layout.Rect, scale: f32) void {
     draw.panel(dl, area, .{});
-    draw.textAt(dl, area.x + 10, area.y + 6, theme.palette.dim, "SYSTEM LOG");
+    const x = area.x + draw.so(10, scale);
+    draw.textAt(dl, x, area.y + draw.so(8, scale), theme.palette.dim, "SYSTEM LOG");
     const n = run.log.count();
     var i: usize = 0;
-    var y = area.y + 24;
+    var y = area.y + draw.so(28, scale);
+    const step = draw.so(18, scale);
     while (i < n) : (i += 1) {
         const linetxt = run.log.at(i);
-        draw.text(dl, area.x + 10, y, severityColor(linetxt), "> {s}", .{linetxt});
-        y += 16;
+        draw.text(dl, x, y, severityColor(linetxt), "> {s}", .{linetxt});
+        y += step;
     }
-    draw.textAt(dl, area.x + 10, area.bottom() - 18, theme.palette.dim, "[WASD] move  [H] hack  [G] grab  [I] inventory  [.] wait  [Q] quit");
+    draw.textAt(dl, x, area.bottom() - draw.so(20, scale), theme.palette.dim, "[WASD] move  [H] hack  [G] grab  [I] inventory  [.] wait  [Q] quit");
 }

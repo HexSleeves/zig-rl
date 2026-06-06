@@ -7,10 +7,14 @@ const theme = @import("../theme.zig");
 const draw = @import("../draw.zig");
 const item_def = @import("../../items/item_def.zig");
 
-const actor_font: f32 = 16.0;
+const actor_font_base: f32 = 16.0;
 
 pub fn draw_view(dl: draw.DrawList, run: *const RunState, l: layout.Layout, cam: camera.Camera) void {
     const vp = l.viewport();
+    const font = actor_font_base * l.scale;
+    const gx = draw.so(4, l.scale);
+    const gy = draw.so(2, l.scale);
+    const inset = draw.so(4, l.scale);
     draw.fillRect(dl, l.map, theme.palette.map_void);
 
     var ly: i32 = 0;
@@ -43,7 +47,7 @@ pub fn draw_view(dl: draw.DrawList, run: *const RunState, l: layout.Layout, cam:
                             .locker => theme.palette.bright,
                             else => null,
                         };
-                        if (oc) |c| draw.fillRect(dl, .{ .x = px + 4, .y = py + 4, .w = vp.tile_size - 8, .h = vp.tile_size - 8 }, c);
+                        if (oc) |c| draw.fillRect(dl, .{ .x = px + inset, .y = py + inset, .w = vp.tile_size - inset * 2, .h = vp.tile_size - inset * 2 }, c);
                     }
                 }
             }
@@ -56,7 +60,7 @@ pub fn draw_view(dl: draw.DrawList, run: *const RunState, l: layout.Layout, cam:
         if (!inViewport(inst.x, inst.y, cam, vp)) continue;
         const def = item_def.getById(inst.def_id) orelse continue;
         const sp = camera.tileToScreen(inst.x, inst.y, cam, vp);
-        draw.glyph(dl, sp[0] + 6, sp[1] + 2, 0xFF66FF33, &[_]u8{def.glyph}, actor_font);
+        draw.glyph(dl, sp[0] + gx, sp[1] + gy, 0xFF66FF33, &[_]u8{def.glyph}, font);
     }
 
     for (run.actors.enemiesSlice()) |enemy| {
@@ -66,11 +70,11 @@ pub fn draw_view(dl: draw.DrawList, run: *const RunState, l: layout.Layout, cam:
         const sp = camera.tileToScreen(enemy.position.x, enemy.position.y, cam, vp);
         const aware = enemy.ai.mode == .chase or enemy.ai.mode == .flee;
         const threat: u32 = if (aware) 0xFF303BFF else 0xFF1E8AFF; // red aware / orange idle
-        draw.glyph(dl, sp[0] + 6, sp[1] + 2, threat, &[_]u8{enemy.glyph}, actor_font);
+        draw.glyph(dl, sp[0] + gx, sp[1] + gy, threat, &[_]u8{enemy.glyph}, font);
     }
 
     const psp = camera.tileToScreen(run.player.position.x, run.player.position.y, cam, vp);
-    draw.glyphGlow(dl, psp[0] + 6, psp[1] + 2, theme.palette.bright, "@", actor_font, 1);
+    draw.glyphGlow(dl, psp[0] + gx, psp[1] + gy, theme.palette.bright, "@", font, draw.so(1, l.scale));
 }
 
 fn inViewport(wx: i32, wy: i32, cam: camera.Camera, vp: camera.Viewport) bool {

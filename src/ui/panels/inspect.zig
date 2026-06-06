@@ -12,25 +12,26 @@ pub const Target = union(enum) {
     tile: [2]i32,
 };
 
-pub fn draw_inspect(dl: draw.DrawList, run: *const RunState, area: layout.Rect, target: Target) void {
+pub fn draw_inspect(dl: draw.DrawList, run: *const RunState, area: layout.Rect, target: Target, scale: f32) void {
     draw.panel(dl, area, .{});
-    draw.textAt(dl, area.x + 10, area.y + 8, theme.palette.dim, "INSPECT");
+    const x = area.x + draw.so(10, scale);
+    draw.textAt(dl, x, area.y + draw.so(8, scale), theme.palette.dim, "INSPECT");
     switch (target) {
-        .none => draw.textAt(dl, area.x + 10, area.y + 30, theme.palette.dim, "(hover the map)"),
+        .none => draw.textAt(dl, x, area.y + draw.so(32, scale), theme.palette.dim, "(hover the map)"),
         .enemy_index => |i| {
             const e = run.actors.enemiesSlice()[i];
-            draw.textAt(dl, area.x + 10, area.y + 30, 0xFF303BFF, e.name);
+            draw.textAt(dl, x, area.y + draw.so(32, scale), 0xFF303BFF, e.name);
             const frac: f32 = if (e.max_hp > 0) @as(f32, @floatFromInt(e.hp)) / @as(f32, @floatFromInt(e.max_hp)) else 0;
-            draw.bar(dl, .{ .x = area.x + 10, .y = area.y + 48, .w = area.w - 20, .h = 8 }, frac, 0xFF303BFF, theme.palette.panel);
-            draw.text(dl, area.x + 10, area.y + 62, theme.palette.text, "HP {d}/{d}", .{ e.hp, e.max_hp });
-            draw.text(dl, area.x + 10, area.y + 80, theme.palette.text, "ARM {d}  EVA {d}", .{ e.armor, e.evasion });
+            draw.bar(dl, .{ .x = x, .y = area.y + draw.so(50, scale), .w = area.w - draw.so(20, scale), .h = draw.so(8, scale) }, frac, 0xFF303BFF, theme.palette.panel);
+            draw.text(dl, x, area.y + draw.so(64, scale), theme.palette.text, "HP {d}/{d}", .{ e.hp, e.max_hp });
+            draw.text(dl, x, area.y + draw.so(82, scale), theme.palette.text, "ARM {d}  EVA {d}", .{ e.armor, e.evasion });
         },
         .item_index => |i| {
             const inst = run.items.instances[i];
             if (item_def.getById(inst.def_id)) |def| {
-                draw.textAt(dl, area.x + 10, area.y + 30, 0xFF66FF33, def.name);
+                draw.textAt(dl, x, area.y + draw.so(32, scale), 0xFF66FF33, def.name);
             }
         },
-        .tile => |t| draw.text(dl, area.x + 10, area.y + 30, theme.palette.text, "tile {d},{d}", .{ t[0], t[1] }),
+        .tile => |t| draw.text(dl, x, area.y + draw.so(32, scale), theme.palette.text, "tile {d},{d}", .{ t[0], t[1] }),
     }
 }

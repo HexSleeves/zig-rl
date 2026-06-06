@@ -28,13 +28,14 @@ pub fn draw_scene(run: *const RunState, l: layout.Layout, cam: camera.Camera, ta
     const state = theme.alertState(disp);
     draw.panel(dl, l.map, .{ .fill = null, .border = tint, .bracket_col = tint });
 
-    const vitals_h: i32 = 84;
-    vitals.draw_vitals(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y, .w = l.sidebar.w, .h = vitals_h });
-    loadout.draw_loadout(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y + vitals_h + 8, .w = l.sidebar.w, .h = l.sidebar.h - vitals_h - 8 });
+    const vitals_h = draw.so(84, l.scale);
+    const split_gap = draw.so(8, l.scale);
+    vitals.draw_vitals(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y, .w = l.sidebar.w, .h = vitals_h }, l.scale);
+    loadout.draw_loadout(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y + vitals_h + split_gap, .w = l.sidebar.w, .h = l.sidebar.h - vitals_h - split_gap }, l.scale);
 
     header.draw_header(dl, run, l);
-    inspect.draw_inspect(dl, run, l.inspect, target);
-    log_panel.draw_log(dl, run, l.log);
+    inspect.draw_inspect(dl, run, l.inspect, target, l.scale);
+    log_panel.draw_log(dl, run, l.log, l.scale);
 
     draw.scanlines(dl, l.map, 0x18);
     if (state != .nominal) {
@@ -48,14 +49,15 @@ pub fn draw_scene(run: *const RunState, l: layout.Layout, cam: camera.Camera, ta
         draw.vignette(dl, l.map, tint, vintensity);
     }
     if (anim.glitch > 0) {
-        const shift: i32 = @intFromFloat(anim.glitch * 6.0);
-        const band = layout.Rect{ .x = l.map.x + shift, .y = l.map.y + @divFloor(l.map.h, 3), .w = l.map.w, .h = 6 };
+        const shift: i32 = @intFromFloat(anim.glitch * 6.0 * l.scale);
+        const band = layout.Rect{ .x = l.map.x + shift, .y = l.map.y + @divFloor(l.map.h, 3), .w = l.map.w, .h = draw.so(6, l.scale) };
         draw.fillRect(dl, band, theme.withAlpha(tint, 0x50));
     }
     if (state == .lockdown) {
         const pulse: u8 = @intFromFloat(160.0 + 60.0 * @sin(anim.time * 6.0));
-        const banner = layout.Rect{ .x = l.map.x + @divFloor(l.map.w, 2) - 160, .y = l.map.y + 8, .w = 320, .h = 26 };
+        const bw = draw.so(320, l.scale);
+        const banner = layout.Rect{ .x = l.map.x + @divFloor(l.map.w - bw, 2), .y = l.map.y + draw.so(8, l.scale), .w = bw, .h = draw.so(26, l.scale) };
         draw.panel(dl, banner, .{ .fill = theme.withAlpha(0xFF2010C8, pulse), .border = 0xFF2010C8, .brackets = true });
-        draw.textAt(dl, banner.x + 18, banner.y + 7, 0xFFFFFFFF, "FACILITY LOCKDOWN - SECTOR SEALED");
+        draw.textAt(dl, banner.x + draw.so(18, l.scale), banner.y + draw.so(7, l.scale), 0xFFFFFFFF, "FACILITY LOCKDOWN - SECTOR SEALED");
     }
 }

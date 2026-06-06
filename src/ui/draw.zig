@@ -10,6 +10,11 @@ fn fx(v: i32) f32 {
     return @floatFromInt(v);
 }
 
+/// Scale a design-space pixel offset by the layout scale (HiDPI-aware).
+pub fn so(v: i32, scale: f32) i32 {
+    return @intFromFloat(@round(@as(f32, @floatFromInt(v)) * scale));
+}
+
 pub fn fillRect(dl: DrawList, r: Rect, col: u32) void {
     dl.addRectFilled(.{ .pmin = .{ fx(r.x), fx(r.y) }, .pmax = .{ fx(r.right()), fx(r.bottom()) }, .col = col });
 }
