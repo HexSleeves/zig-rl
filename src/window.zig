@@ -37,6 +37,7 @@ const InputState = struct {
     wait: bool = false,
     quit: bool = false,
     pickup: bool = false,
+    hack: bool = false,
     debug_toggle: bool = false,
 };
 
@@ -120,11 +121,12 @@ fn framebufferScale(base_layout: render.Layout, fb_size: [2]c_int) f32 {
 fn readCommand(window: *zglfw.Window, state: *InputState) ?input.Command {
     if (pressedAny(window, &state.north, &.{ .w, .k, .up })) return .{ .move = .north };
     if (pressedAny(window, &state.south, &.{ .s, .j, .down })) return .{ .move = .south };
-    if (pressedAny(window, &state.west, &.{ .a, .h, .left })) return .{ .move = .west };
+    if (pressedAny(window, &state.west, &.{ .a, .left })) return .{ .move = .west };
     if (pressedAny(window, &state.east, &.{ .d, .l, .right })) return .{ .move = .east };
     if (pressedAny(window, &state.wait, &.{ .period, .space })) return .wait;
     if (pressedAny(window, &state.quit, &.{ .q, .escape })) return .quit;
     if (pressedAny(window, &state.pickup, &.{.g})) return .pickup;
+    if (pressedAny(window, &state.hack, &.{.h})) return .hack;
     return null;
 }
 
@@ -163,9 +165,13 @@ fn drawHud(game: *const Game, l: render.Layout) void {
     if (zgui.begin("HUD", .{ .flags = fixedPanelFlags() })) {
         zgui.text("zig-rl", .{});
         zgui.sameLine(.{});
-        zgui.textDisabled("WASD/HJKL move  . wait  G pick up  I inventory  Q quit", .{});
+        zgui.textDisabled("WASD move  . wait  G pick up  H hack  I inventory  Q quit", .{});
         zgui.sameLine(.{ .spacing = 32 });
-        zgui.text("HP:{d}/{d}  Turn:{d}", .{ game.state.run.player.hp, game.state.run.player.max_hp, game.state.run.turn_count });
+        zgui.text("HP:{d}/{d}  Turn:{d}  Alert:{d}", .{ game.state.run.player.hp, game.state.run.player.max_hp, game.state.run.turn_count, game.state.run.alert_level });
+        if (game.state.run.alert_level >= 80) {
+            zgui.sameLine(.{});
+            zgui.textColored(.{ 1.0, 0.2, 0.2, 1.0 }, "[LOCKDOWN]", .{});
+        }
     }
     zgui.end();
 }
@@ -194,13 +200,30 @@ fn drawMap(game: *const Game, l: render.Layout) void {
             const py = l.map_origin_y + @as(i32, @intCast(y)) * l.tile_size;
             const is_visible = game.state.run.visibility.isVisible(@intCast(x), @intCast(y));
             const is_explored = game.state.run.visibility.isExplored(@intCast(x), @intCast(y));
-            const color = if (is_visible) switch (game.state.run.map.get(x, y).kind) {
+            const tile_kind = game.state.run.map.get(x, y).kind;
+            var color = if (is_visible) switch (tile_kind) {
                 .wall => palette.wall,
                 .floor => palette.floor,
-            } else if (is_explored) switch (game.state.run.map.get(x, y).kind) {
+                .door => 0xff_44_66_88,
+            } else if (is_explored) switch (tile_kind) {
                 .wall => dimColor(palette.wall),
                 .floor => dimColor(palette.floor),
+                .door => dimColor(0xff_44_66_88),
             } else palette.background;
+            // Object overlay
+            if (is_visible) {
+                if (game.state.run.objects.objectAt(@intCast(x), @intCast(y))) |obj_id| {
+                    if (game.state.run.objects.getObject(obj_id)) |obj| {
+                        switch (obj.kind) {
+                            .door => color = if (obj.state == .open) palette.floor else 0xff_44_66_88,
+                            .terminal => color = 0xff_22_aa_44,
+                            .camera => color = if (obj.powered) 0xff_aa_44_22 else 0xff_44_44_44,
+                            .locker => color = 0xff_88_88_44,
+                            else => {},
+                        }
+                    }
+                }
+            }
             drawTile(draw_list, px, py, l.tile_size, color);
         }
     }
