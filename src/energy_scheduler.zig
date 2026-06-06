@@ -33,8 +33,9 @@ pub const EnergyScheduler = struct {
         return sched;
     }
 
-    /// Register an enemy actor with given speed.
+    /// Register an enemy actor with given speed. Speed must be >= 1 to prevent livelock in nextActor().
     pub fn addActor(self: *EnergyScheduler, id: ids.ActorId, speed: u32) void {
+        std.debug.assert(speed >= 1);
         if (self.count >= self.actors.len) return;
         self.actors[self.count] = ActorEnergy{
             .id = id,
