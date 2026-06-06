@@ -42,11 +42,9 @@ pub const Game = struct {
             const actor_id = self.state.run.scheduler.nextActor();
             if (actor_id.eql(ids.player_actor_id)) break; // player's turn
 
-            // Enemy takes a wait action (real AI in Milestone 2).
-            // TODO(M2): endActorTurn should return the action cost so variable-cost
-            // actions (melee, hack, etc.) deduct the right amount.
-            try turn.endActorTurn(&self.state.run, actor_id);
-            self.state.run.scheduler.deductCost(actor_id, actions.ActionCost.wait);
+            // Enemy takes an AI-driven action; deduct the actual cost returned.
+            const cost = try turn.endActorTurn(&self.state.run, actor_id);
+            self.state.run.scheduler.deductCost(actor_id, cost);
         }
     }
 };
