@@ -38,6 +38,16 @@ pub const Rng = struct {
     pub fn nextRange(self: *Rng, comptime T: type, min: T, max: T) T {
         return self.random().intRangeLessThan(T, min, max);
     }
+
+    /// Returns internal Xoshiro256++ state for serialization.
+    pub fn getState(self: *const Rng) [4]u64 {
+        return self.prng.s;
+    }
+
+    /// Restores internal state from a saved snapshot.
+    pub fn setState(self: *Rng, state: [4]u64) void {
+        self.prng.s = state;
+    }
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

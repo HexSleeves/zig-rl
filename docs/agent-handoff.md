@@ -2,12 +2,12 @@
 
 Date: 2026-06-06  
 Plan: `docs/roguelite-campaign-plan.md`  
-Stack: Zig 0.16.0, zig-gamedev (zgui/zglfw/zopengl), branch `milestone-7-campaign`  
-Tests: 33 integration (tests/simulation.zig) + 89 inline = all passing (`zig build test` → exit 0)
+Stack: Zig 0.16.0, zig-gamedev (zgui/zglfw/zopengl), branch `main`  
+Tests: 33 integration (tests/simulation.zig) + 96 inline = all passing (`zig build test` → exit 0)
 
 ---
 
-## Completed Milestones (M0–M7)
+## Completed Milestones (M0–M8)
 
 | # | Name | Key additions |
 |---|------|---------------|
@@ -19,6 +19,7 @@ Tests: 33 integration (tests/simulation.zig) + 89 inline = all passing (`zig bui
 | M5 | Items | 18 item defs, ItemStore, player HP, enemy damage, loot tables, G=pickup, I=inventory |
 | M6 | Hacking | ObjectStore, door tiles (block move+sight), interact/hack actions, camera alerts, alert decay, lockdown |
 | M7 | Campaign | CampaignState: RunOutcome/RunRecord, OperativeBackground, FacilityWing/WingStatus, unlock pool, glossary, lore, run history, endRun() integration |
+| M8 | Save/Load | src/save/save.zig: SAVE_VERSION=1, ZRLC/ZRLR/ZRLY magic, field-by-field binary serialization, crash-safe atomic writes (.tmp→sync→rename), Rng.getState/setState, saveCampaign/loadCampaign/saveRun/loadRun/saveReplayHeader |
 
 ---
 
@@ -99,6 +100,15 @@ src/
                        wing_status[4] run_history[20] seen_item_defs seen_enemy_glyphs discovered_lore
                        applyUnlockProgression() — beta unlocks on extraction; ex_military on 5+ kills
 
+  save/
+    save.zig           SAVE_VERSION=1; CAMPAIGN_MAGIC="ZRLC" RUN_MAGIC="ZRLR" REPLAY_MAGIC="ZRLY"
+                       CommandByte enum (none=0..hack=12) for replay log
+                       saveCampaign/loadCampaign → saves/campaign.sav (~8KB)
+                       saveRun/loadRun → saves/run.sav (~32KB); loadRun calls RunState.init() then overwrites
+                       saveReplayHeader(seed) → saves/replay.log
+                       writeAtomic(): write .tmp → sync → rename (crash-safe)
+                       bitset32ToU32/u32ToBitset32; encodeTile/decodeTile; glyphToName
+
 tests/
   simulation.zig       33 integration tests
 ```
@@ -131,14 +141,6 @@ player acts → executeAction → deductCost(player, costOf(action))
 
 ## Remaining Milestones
 
-### M8: Save/Load, Serialization, Replays
-- Versioned save format: campaign save, active run save, config/prefs
-- Explicit schema structs + SAVE_VERSION constant
-- Save seeds + enough state for deterministic continuation
-- Migration tests for future save versions
-- Replay logs: initial seed + command stream
-- Crash-safe writes: write temp → flush → rename
-
 ### M9: Production UI, Audio, Art Pipeline, Settings
 - Better tile rendering: camera centering, hover/inspect panel, target preview, minimap, message filtering
 - Full keyboard-first controls + mouse support for inspection/inventory
@@ -155,10 +157,8 @@ player acts → executeAction → deductCost(player, costOf(action))
 ## Suggested Next Session Start
 
 ```
-Read docs/agent-handoff.md. Implement Milestone 8: Save/Load, Serialization, Replays per docs/roguelite-campaign-plan.md.
-Create branch milestone-8-saveload. Key files: src/campaign_state.zig (complete), src/run_state.zig, src/state.zig.
-Add SAVE_VERSION const, versioned schema structs for campaign + run saves, crash-safe write (temp→flush→rename).
-Add replay log: initial seed + command stream.
+Read docs/agent-handoff.md. Implement Milestone 9: Production UI, Audio, Art Pipeline, Settings.
+Key files: src/window.zig (rendering loop), src/ui/hud.zig, src/render.zig.
 GateGuard active — state facts before every Edit/Write.
 Caveman mode active.
 ```

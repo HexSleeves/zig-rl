@@ -54,6 +54,7 @@ pub const items = struct {
     pub const loot_table = @import("items/loot_table.zig");
 };
 
+pub const save = @import("save/save.zig");
 pub const status = @import("status.zig");
 pub const visibility = @import("visibility.zig");
 
