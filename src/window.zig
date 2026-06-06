@@ -62,6 +62,8 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
     var inv_sel: usize = 0;
     var fps: f32 = 0;
     var last_t: f64 = zglfw.getTime();
+    var anim = scene.Anim{};
+    var prev_alert: u8 = 0;
 
     while (!window.shouldClose() and !game.state.quit_requested) {
         zglfw.pollEvents();
@@ -75,7 +77,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
         zgui.backend.newFrame(@intCast(fb[0]), @intCast(fb[1]));
         const l = layout.layoutForScale(framebufferScale(base_layout, fb));
         zgui.pushFont(null, base_font_size * l.scale);
-        drawMode(game, window, l, show_debug, inv_sel, fps);
+        drawMode(game, window, l, show_debug, inv_sel, fps, anim);
         zgui.popFont();
         zgui.backend.draw();
 
@@ -84,6 +86,14 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
         const dt = now - last_t;
         if (dt > 0) fps = @floatCast(1.0 / dt);
         last_t = now;
+
+        anim.time += @as(f32, @floatCast(dt));
+        const real_alert: f32 = @floatFromInt(game.state.run.alert_level);
+        anim.displayed_alert += (real_alert - anim.displayed_alert) * @as(f32, @floatCast(@min(dt * 4.0, 1.0)));
+        if (game.state.run.alert_level > prev_alert) anim.glitch = 1.0;
+        anim.glitch = @max(0.0, anim.glitch - @as(f32, @floatCast(dt * 2.0)));
+        prev_alert = game.state.run.alert_level;
+
         frames += 1;
         if (smoke_frame_limit) |lim| if (frames >= lim) break;
     }
@@ -115,7 +125,7 @@ fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: 
     }
 }
 
-fn drawMode(game: *Game, window: *zglfw.Window, l: layout.Layout, show_debug: bool, inv_sel: usize, fps: f32) void {
+fn drawMode(game: *Game, window: *zglfw.Window, l: layout.Layout, show_debug: bool, inv_sel: usize, fps: f32, anim: scene.Anim) void {
     const rs = &game.state.run;
     switch (game.state.current_mode) {
         .main_menu => main_menu.draw_menu(l),
@@ -123,7 +133,7 @@ fn drawMode(game: *Game, window: *zglfw.Window, l: layout.Layout, show_debug: bo
         .running, .inventory => {
             const cam = camera.follow(rs.player.position.x, rs.player.position.y, @intCast(rs.map.width), @intCast(rs.map.height), l.viewport());
             const target = resolveTarget(rs, window, l, cam);
-            scene.draw_scene(rs, l, cam, target);
+            scene.draw_scene(rs, l, cam, target, anim);
             if (game.state.current_mode == .inventory) inventory_screen.draw_inventory(rs, l, inv_sel);
         },
         else => {},
