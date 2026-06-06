@@ -67,6 +67,16 @@ pub const ActorStore = struct {
         }
         return null;
     }
+
+    /// Return the ActorId of the alive enemy at (x, y), or null if none.
+    pub fn enemyAtPosition(self: *const ActorStore, x: i32, y: i32) ?ids.ActorId {
+        for (self.enemies[0..self.enemy_count], 0..) |enemy, idx| {
+            if (enemy.alive and enemy.position.x == x and enemy.position.y == y) {
+                return ids.ActorId{ .value = @intCast(idx + 1) };
+            }
+        }
+        return null;
+    }
 };
 
 // ---------------------------------------------------------------------------

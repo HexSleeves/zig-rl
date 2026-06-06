@@ -1,7 +1,9 @@
+const std = @import("std");
 const movement = @import("systems/movement.zig");
 const input = @import("input.zig");
 const RunState = @import("run_state.zig").RunState;
 const turn = @import("systems/turn.zig");
+const combat = @import("systems/combat.zig");
 
 pub const Direction = movement.Direction;
 
@@ -86,8 +88,38 @@ pub fn executeAction(action: Action, run: *RunState) !void {
             try turn.endPlayerTurn(run);
         },
         .melee_bump => |dir| {
-            _ = dir; // direction unused until M2 combat
-            try run.log.add("You bump into the enemy.");
+            const delta = movement.Direction.delta(dir);
+            const tx = run.player.position.x + delta.x;
+            const ty = run.player.position.y + delta.y;
+
+            if (run.actors.enemyAtPosition(tx, ty)) |target_id| {
+                const enemy_name = run.actors.getEnemy(target_id).?.name;
+                const result = try combat.playerMeleeAttack(run, target_id);
+
+                if (!result.hit) {
+                    var buf: [64]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "You swing at the {s} and miss.", .{enemy_name});
+                    try run.log.add(msg);
+                } else if (result.is_crit) {
+                    var buf: [64]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "Critical hit! You hit the {s} for {d} damage.", .{ enemy_name, result.damage });
+                    try run.log.add(msg);
+                } else {
+                    var buf: [64]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "You hit the {s} for {d} damage.", .{ enemy_name, result.damage });
+                    try run.log.add(msg);
+                }
+
+                if (result.target_died) {
+                    var buf: [64]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "The {s} dies.", .{enemy_name});
+                    try run.log.add(msg);
+                    run.scheduler.removeActor(target_id);
+                }
+            } else {
+                try run.log.add("You swing at nothing.");
+            }
+
             try turn.endPlayerTurn(run);
         },
         .quit => {}, // handled at State level
@@ -95,27 +127,22 @@ pub fn executeAction(action: Action, run: *RunState) !void {
 }
 
 test "costOf wait" {
-    const std = @import("std");
     try std.testing.expectEqual(@as(u32, 100), costOf(.wait));
 }
 
 test "costOf move north" {
-    const std = @import("std");
     try std.testing.expectEqual(@as(u32, 100), costOf(.{ .move = .north }));
 }
 
 test "costOf melee_bump north" {
-    const std = @import("std");
     try std.testing.expectEqual(@as(u32, 100), costOf(.{ .melee_bump = .north }));
 }
 
 test "ActionCost shoot" {
-    const std = @import("std");
     try std.testing.expectEqual(@as(u32, 120), ActionCost.shoot);
 }
 
 test "ActionCost hack" {
-    const std = @import("std");
     try std.testing.expectEqual(@as(u32, 150), ActionCost.hack);
 }
 
@@ -142,7 +169,6 @@ test "intentFromCommand maps wait to intent_wait" {
 // ---------------------------------------------------------------------------
 
 test "validateIntent: move into wall returns null" {
-    const std = @import("std");
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
     // Player starts at (player_start_x=1, player_start_y=2).
@@ -152,7 +178,6 @@ test "validateIntent: move into wall returns null" {
 }
 
 test "validateIntent: move into open floor returns move action" {
-    const std = @import("std");
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
     // Player starts at (1, 2). Moving east → (2, 2) is inside room 1..17 x 1..10, open floor.
@@ -162,7 +187,6 @@ test "validateIntent: move into open floor returns move action" {
 }
 
 test "validateIntent: move into enemy upgrades to melee_bump" {
-    const std = @import("std");
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
     // RunState.init places enemy 1 at (28, 10).
