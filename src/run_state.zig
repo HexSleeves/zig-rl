@@ -26,11 +26,11 @@ pub const RunState = struct {
         var scheduler = energy_scheduler.EnergyScheduler.init();
 
         // Add 2 placeholder enemies matching previous state.zig positions
-        if (actors.addEnemy(.{ .position = .{ .x = 28, .y = 10 } })) |id| {
+        if (actors.addEnemy(.{ .position = .{ .x = 28, .y = 10 }, .glyph = 'g', .name = "goblin", .hp = 8, .max_hp = 8, .accuracy = 65, .armor = 0 })) |id| {
             scheduler.addActor(id, energy_scheduler.BASE_SPEED);
         }
-        if (actors.addEnemy(.{ .position = .{ .x = 32, .y = 14 }, .glyph = 's', .name = "sentinel" })) |id| {
-            scheduler.addActor(id, energy_scheduler.BASE_SPEED);
+        if (actors.addEnemy(.{ .position = .{ .x = 32, .y = 14 }, .glyph = 's', .name = "sentinel", .hp = 15, .max_hp = 15, .accuracy = 75, .armor = 2, .speed = 80 })) |id| {
+            scheduler.addActor(id, 80);
         }
 
         return RunState{
