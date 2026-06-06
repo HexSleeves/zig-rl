@@ -46,7 +46,10 @@ pub const ui = struct {
     pub const theme = @import("ui/theme.zig");
 
     pub const panels = struct {
+        pub const header = @import("ui/panels/header.zig");
+        pub const loadout = @import("ui/panels/loadout.zig");
         pub const map_view = @import("ui/panels/map_view.zig");
+        pub const vitals = @import("ui/panels/vitals.zig");
     };
 };
 
