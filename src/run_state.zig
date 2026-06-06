@@ -7,6 +7,7 @@ const enemy_mod = @import("entities/enemy.zig");
 const log_mod = @import("ui/log.zig");
 const actor_store = @import("stores/actor_store.zig");
 const item_store = @import("stores/item_store.zig");
+const loot_table = @import("items/loot_table.zig");
 const energy_scheduler = @import("energy_scheduler.zig");
 const rng_mod = @import("rng.zig");
 const factions = @import("factions.zig");
@@ -78,6 +79,17 @@ pub const RunState = struct {
             }
         }
 
+        // Spawn loot items in rooms (skip room 0 — player spawn)
+        var items = item_store.ItemStore.init();
+        for (floor.rooms[0..floor.room_count], 0..) |room, room_idx| {
+            if (room_idx == 0) continue; // skip player start room
+            if (loot_table.rollLoot(room.zone, 1, &rng)) |def_id| {
+                const lx: i32 = @intCast(room.centerX());
+                const ly: i32 = @intCast(room.centerY());
+                _ = items.addItem(def_id, lx, ly);
+            }
+        }
+
         var vis = visibility_mod.VisibilityMap.init();
         vis.compute(&floor.map, player_x, player_y, FOV_RADIUS);
 
@@ -85,7 +97,7 @@ pub const RunState = struct {
             .map = floor.map,
             .player = .{ .position = .{ .x = player_x, .y = player_y } },
             .actors = actors,
-            .items = item_store.ItemStore.init(),
+            .items = items,
             .turn_count = 0,
             .log = log_mod.MessageLog.init(allocator),
             .current_floor = 1,
