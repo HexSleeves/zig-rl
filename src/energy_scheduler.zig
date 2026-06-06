@@ -115,7 +115,7 @@ pub const EnergyScheduler = struct {
     }
 
     /// Tick all actors: each gains their speed in energy.
-    fn tick(self: *EnergyScheduler) void {
+    pub fn tick(self: *EnergyScheduler) void {
         for (self.actors[0..self.count]) |*entry| {
             entry.energy += @as(i32, @intCast(entry.speed));
         }
