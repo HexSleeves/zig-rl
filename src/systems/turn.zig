@@ -37,7 +37,13 @@ pub fn endActorTurn(run: *RunState, actor_id: ids.ActorId) !u32 {
             const delta = dir.delta();
             const nx = enemy.position.x + delta.x;
             const ny = enemy.position.y + delta.y;
-            if (!run.map.isBlockedAt(nx, ny)) {
+            // Moving into player tile → melee instead of occupying
+            if (nx == run.player.position.x and ny == run.player.position.y) {
+                _ = try combat.enemyMeleeAttack(run, actor_id);
+                break :blk ActionCost.melee;
+            }
+            // Don't stack onto another enemy
+            if (!run.map.isBlockedAt(nx, ny) and run.actors.enemyAtPosition(nx, ny) == null) {
                 enemy.position.x = nx;
                 enemy.position.y = ny;
             }

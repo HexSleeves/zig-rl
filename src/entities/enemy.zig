@@ -20,7 +20,7 @@ pub const Enemy = struct {
 
     // Faction and perception
     faction: ids.FactionId = factions.SECURITY,
-    awareness: u32 = 5, // tile radius for patrol awareness
+    awareness: u32 = 8, // tile radius for patrol awareness
 
     // AI state
     ai: ai_behavior.AiState = .{},
