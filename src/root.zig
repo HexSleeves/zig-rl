@@ -44,6 +44,10 @@ pub const ui = struct {
     pub const layout = @import("ui/layout.zig");
     pub const log = @import("ui/log.zig");
     pub const theme = @import("ui/theme.zig");
+
+    pub const panels = struct {
+        pub const map_view = @import("ui/panels/map_view.zig");
+    };
 };
 
 pub const stores = struct {
