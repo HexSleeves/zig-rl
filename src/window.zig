@@ -8,6 +8,8 @@ const config = @import("config.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
 const procgen = @import("world/procgen.zig");
+const item_def = @import("items/item_def.zig");
+const inventory_mod = @import("items/inventory.zig");
 
 const gl = zopengl.bindings;
 const base_font_size: f32 = 13.0;
@@ -34,6 +36,7 @@ const InputState = struct {
     east: bool = false,
     wait: bool = false,
     quit: bool = false,
+    pickup: bool = false,
     debug_toggle: bool = false,
 };
 
@@ -65,6 +68,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
     var frames_rendered: u32 = 0;
     var show_debug_panel: bool = true;
     var show_zone_overlay: bool = false;
+    var show_inventory: bool = false;
     var last_frame_time: f64 = zglfw.getTime();
     var fps: f32 = 0.0;
 
@@ -79,6 +83,9 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
         if (pressedOne(window, &input_state.debug_toggle, .F2)) {
             show_zone_overlay = !show_zone_overlay;
         }
+        if (pressedOne(window, &input_state.debug_toggle, .i)) {
+            show_inventory = !show_inventory;
+        }
 
         const fb_size = window.getFramebufferSize();
         gl.viewport(0, 0, fb_size[0], fb_size[1]);
@@ -87,7 +94,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
         const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
-        drawGame(game, l, show_debug_panel, show_zone_overlay, fps);
+        drawGame(game, l, show_debug_panel, show_zone_overlay, show_inventory, fps);
         zgui.backend.draw();
 
         window.swapBuffers();
@@ -117,6 +124,7 @@ fn readCommand(window: *zglfw.Window, state: *InputState) ?input.Command {
     if (pressedAny(window, &state.east, &.{ .d, .l, .right })) return .{ .move = .east };
     if (pressedAny(window, &state.wait, &.{ .period, .space })) return .wait;
     if (pressedAny(window, &state.quit, &.{ .q, .escape })) return .quit;
+    if (pressedAny(window, &state.pickup, &.{.g})) return .pickup;
     return null;
 }
 
@@ -137,7 +145,7 @@ fn pressedOne(window: *zglfw.Window, previous: *bool, key: zglfw.Key) bool {
     return current and !previous.*;
 }
 
-fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, show_zones: bool, fps: f32) void {
+fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, show_zones: bool, show_inventory: bool, fps: f32) void {
     zgui.pushFont(null, base_font_size * l.scale);
     defer zgui.popFont();
 
@@ -146,6 +154,7 @@ fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, show_zones: b
     drawHud(game, l);
     drawLog(game, l);
     if (show_debug) drawDebug(game, fps);
+    if (show_inventory) drawInventory(game, fps);
 }
 
 fn drawHud(game: *const Game, l: render.Layout) void {
@@ -154,9 +163,9 @@ fn drawHud(game: *const Game, l: render.Layout) void {
     if (zgui.begin("HUD", .{ .flags = fixedPanelFlags() })) {
         zgui.text("zig-rl", .{});
         zgui.sameLine(.{});
-        zgui.textDisabled("WASD/HJKL/arrows move   . waits   Q/Esc quits", .{});
+        zgui.textDisabled("WASD/HJKL move  . wait  G pick up  I inventory  Q quit", .{});
         zgui.sameLine(.{ .spacing = 32 });
-        zgui.text("Turn {d}", .{game.state.run.turn_count});
+        zgui.text("HP:{d}/{d}  Turn:{d}", .{ game.state.run.player.hp, game.state.run.player.max_hp, game.state.run.turn_count });
     }
     zgui.end();
 }
@@ -194,6 +203,22 @@ fn drawMap(game: *const Game, l: render.Layout) void {
             } else palette.background;
             drawTile(draw_list, px, py, l.tile_size, color);
         }
+    }
+
+    // Render items on ground
+    const item_color: u32 = 0xff44cc88; // green-ish
+    for (game.state.run.items.instances[0..game.state.run.items.count]) |*inst| {
+        if (inst.x < 0) continue; // in inventory
+        if (!game.state.run.visibility.isVisible(inst.x, inst.y)) continue;
+        const def = item_def.getById(inst.def_id) orelse continue;
+        const px = l.map_origin_x + inst.x * l.tile_size;
+        const py = l.map_origin_y + inst.y * l.tile_size;
+        draw_list.addTextExtendedUnformatted(
+            .{ @floatFromInt(px + scaledPixels(6, l.scale)), @floatFromInt(py + scaledPixels(4, l.scale)) },
+            item_color,
+            &[_]u8{def.glyph},
+            .{ .font = null, .font_size = actor_font_size * l.scale },
+        );
     }
 
     for (game.state.run.actors.enemiesSlice()) |enemy| {
@@ -283,6 +308,43 @@ fn drawZoneOverlay(game: *const Game, l: render.Layout) void {
             .{@tagName(room.zone)},
         );
     }
+}
+
+fn drawInventory(game: *const Game, fps: f32) void {
+    _ = fps;
+    const rs = &game.state.run;
+    const inv = &rs.player.inventory;
+    zgui.setNextWindowPos(.{ .x = 80, .y = 80, .cond = .always });
+    zgui.setNextWindowSize(.{ .w = 300, .h = 360, .cond = .always });
+    if (zgui.begin("Inventory", .{ .flags = .{ .no_saved_settings = true } })) {
+        zgui.text("HP: {d}/{d}", .{ rs.player.hp, rs.player.max_hp });
+        zgui.separator();
+        zgui.text("Inventory ({d}/{d})", .{ inv.count, inventory_mod.max_inventory });
+        zgui.separator();
+        for (inv.items) |slot| {
+            const item_id = slot orelse continue;
+            const inst = rs.items.getItem(item_id) orelse continue;
+            const def = item_def.getById(inst.def_id) orelse continue;
+            const equipped = inv.equipment.isEquipped(item_id);
+            if (equipped) {
+                zgui.textColored(colorFloats(0xff44cc88), "  [{c}] {s} [E]", .{ def.glyph, def.name });
+            } else {
+                zgui.text("  [{c}] {s}", .{ def.glyph, def.name });
+            }
+        }
+        zgui.separator();
+        zgui.text("Equipped Slots:", .{});
+        for (inv.equipment.slots, 0..) |maybe_eid, slot_idx| {
+            const eid = maybe_eid orelse continue;
+            const inst = rs.items.getItem(eid) orelse continue;
+            const def = item_def.getById(inst.def_id) orelse continue;
+            const slot: inventory_mod.EquipSlot = @enumFromInt(slot_idx);
+            zgui.text("  {s}: {s}", .{ @tagName(slot), def.name });
+        }
+        zgui.separator();
+        zgui.textDisabled("Press I to close | G to pick up", .{});
+    }
+    zgui.end();
 }
 
 fn drawDebug(game: *const Game, fps: f32) void {

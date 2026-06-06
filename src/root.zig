@@ -41,6 +41,12 @@ pub const stores = struct {
     pub const item_store = @import("stores/item_store.zig");
 };
 
+pub const items = struct {
+    pub const item_def = @import("items/item_def.zig");
+    pub const inventory = @import("items/inventory.zig");
+    pub const loot_table = @import("items/loot_table.zig");
+};
+
 pub const status = @import("status.zig");
 pub const visibility = @import("visibility.zig");
 
