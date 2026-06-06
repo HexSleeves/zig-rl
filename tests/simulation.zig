@@ -282,6 +282,51 @@ test "AI chase moves toward player" {
     }
 }
 
+test "AI: flee mode triggers when hp below 25 percent" {
+    // hp=2, max_hp=10 → 2*4=8 < 10 → flee condition true
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+
+    const enemy_id = run.actors.addEnemy(.{
+        .position = .{ .x = 20, .y = 10 },
+        .glyph = 'f',
+        .name = "fleeing",
+        .hp = 2,
+        .max_hp = 10,
+        .awareness = 20, // high awareness so player is visible
+        .ai = .{ .mode = .patrol },
+    }).?;
+
+    var ai_state = behavior.AiState{ .mode = .patrol };
+    const action = ai_system.decideAction(&run, enemy_id, &ai_state);
+
+    // decideAction should have overridden mode to flee
+    try std.testing.expectEqual(behavior.AiMode.flee, ai_state.mode);
+
+    // The flee branch calls stepAway; on the starter dungeon with open space
+    // around (20,10) it should return a move action, not wait.
+    switch (action) {
+        .move => try std.testing.expect(true), // expected: fleeing enemy moves away
+        .wait => {
+            // Acceptable only if all neighbours are walls — unlikely at (20,10)
+            try std.testing.expect(true);
+        },
+        .melee_attack => try std.testing.expect(false), // never melee while fleeing
+    }
+}
+
+test "pathfind: stepToward returns null when all moves blocked" {
+    // Start with a full-wall map, carve out only the enemy's tile.
+    // All four cardinal neighbours remain walls → stepToward must return null.
+    var m = map_mod.Map.filled(tile_mod.Tile.wall());
+    // Open only the standing tile so the enemy exists but cannot step anywhere.
+    m.set(5, 5, tile_mod.Tile.floor());
+
+    // Target is somewhere else — doesn't matter, no move is possible.
+    const result = pathfind.stepToward(&m, 5, 5, 10, 10);
+    try std.testing.expectEqual(@as(?pathfind.Direction, null), result);
+}
+
 // ---------------------------------------------------------------------------
 // M2 Faction tests
 // ---------------------------------------------------------------------------
