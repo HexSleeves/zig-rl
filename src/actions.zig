@@ -4,6 +4,8 @@ const input = @import("input.zig");
 const RunState = @import("run_state.zig").RunState;
 const turn = @import("systems/turn.zig");
 const combat = @import("systems/combat.zig");
+const ids = @import("ids.zig");
+const item_def = @import("items/item_def.zig");
 
 pub const Direction = movement.Direction;
 
@@ -14,6 +16,8 @@ pub const ActionIntent = union(enum) {
     /// Attempt to attack in direction (validated to enemy presence).
     melee_bump: Direction,
     quit,
+    pickup,
+    use_item: ids.ItemId,
 };
 
 /// Validated, ready-to-execute form.
@@ -22,6 +26,8 @@ pub const Action = union(enum) {
     wait,
     melee_bump: Direction,
     quit,
+    pickup,
+    use_item: ids.ItemId,
 };
 
 /// Energy costs per action type.
@@ -42,6 +48,8 @@ pub fn costOf(action: Action) u32 {
         .wait => ActionCost.wait,
         .melee_bump => ActionCost.melee,
         .quit => 0,
+        .pickup => ActionCost.move,
+        .use_item => ActionCost.wait,
     };
 }
 
@@ -52,6 +60,7 @@ pub fn intentFromCommand(cmd: input.Command) ?ActionIntent {
         .move => |dir| .{ .move = dir },
         .wait => .wait,
         .quit => .quit,
+        .pickup => .pickup,
         .none => null,
     };
 }
@@ -73,6 +82,8 @@ pub fn validateIntent(intent: ActionIntent, run: *const RunState) ?Action {
         .wait => .wait,
         .melee_bump => |dir| .{ .melee_bump = dir },
         .quit => .quit,
+        .pickup => .pickup,
+        .use_item => |item_id| .{ .use_item = item_id },
     };
 }
 
@@ -126,6 +137,51 @@ pub fn executeAction(action: Action, run: *RunState) !void {
             run.recomputeFov();
         },
         .quit => {}, // handled at State level
+        .pickup => {
+            const px = run.player.position.x;
+            const py = run.player.position.y;
+            if (run.items.firstItemAt(px, py)) |item_id| {
+                const inst = run.items.getItemMut(item_id).?;
+                const def = item_def.getById(inst.def_id).?;
+                if (run.player.inventory.add(item_id)) {
+                    // Mark as owned, move off ground
+                    inst.owner = ids.player_actor_id;
+                    inst.x = -1;
+                    inst.y = -1;
+                    var buf: [64]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "You pick up the {s}.", .{def.name});
+                    try run.log.add(msg);
+                } else {
+                    try run.log.add("Your inventory is full.");
+                }
+            } else {
+                try run.log.add("There is nothing here to pick up.");
+            }
+            try turn.endPlayerTurn(run);
+            run.recomputeFov();
+        },
+        .use_item => |item_id| {
+            if (run.items.getItemMut(item_id)) |inst| {
+                const def = item_def.getById(inst.def_id).?;
+                if (def.kind == .consumable) {
+                    const heal = def.heal_amount;
+                    if (heal > 0) {
+                        run.player.hp = @min(run.player.max_hp, run.player.hp + heal);
+                    }
+                    _ = run.player.inventory.remove(item_id);
+                    run.items.removeItem(item_id);
+                    var buf: [80]u8 = undefined;
+                    const msg = try std.fmt.bufPrint(&buf, "You use the {s}. (+{d} HP)", .{ def.name, heal });
+                    try run.log.add(msg);
+                } else {
+                    try run.log.add("You can't use that.");
+                }
+            } else {
+                try run.log.add("Item not found.");
+            }
+            try turn.endPlayerTurn(run);
+            run.recomputeFov();
+        },
     }
 }
 

@@ -4,6 +4,7 @@ pub const Command = union(enum) {
     move: movement.Direction,
     wait,
     quit,
+    pickup,
     none,
 };
 
@@ -15,6 +16,7 @@ pub fn parse(byte: u8) Command {
         'd', 'D', 'l', 'L' => .{ .move = .east },
         '.', ' ' => .wait,
         'q', 'Q' => .quit,
+        'g', 'G' => .pickup,
         else => .none,
     };
 }
