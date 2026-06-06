@@ -1,5 +1,6 @@
 const std = @import("std");
 const ids = @import("../ids.zig");
+const factions = @import("../factions.zig");
 const RunState = @import("../run_state.zig").RunState;
 const behavior = @import("behavior.zig");
 const pathfind = @import("pathfind.zig");
@@ -62,7 +63,10 @@ pub fn decideAction(
     switch (ai_state.mode) {
         .sentry => {
             if (player_visible) {
-                return AiAction{ .melee_attack = ids.player_actor_id };
+                // Only attack if hostile to player faction
+                if (factions.isHostile(enemy.faction, factions.PLAYER)) {
+                    return AiAction{ .melee_attack = ids.player_actor_id };
+                }
             }
             return .wait;
         },

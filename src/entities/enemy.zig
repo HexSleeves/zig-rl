@@ -1,5 +1,8 @@
 const entity = @import("entity.zig");
 const ai_behavior = @import("../ai/behavior.zig");
+const ids = @import("../ids.zig");
+const factions = @import("../factions.zig");
+const status_mod = @import("../status.zig");
 
 pub const Enemy = struct {
     position: entity.Position,
@@ -16,15 +19,14 @@ pub const Enemy = struct {
     speed: u32 = 100, // energy per tick (matches BASE_SPEED)
 
     // Faction and perception
-    faction: u32 = 1, // 1=security by default; use raw u32 until factions.zig exists
+    faction: ids.FactionId = factions.SECURITY,
     awareness: u32 = 5, // tile radius for patrol awareness
 
     // AI state
     ai: ai_behavior.AiState = .{},
 
-    // Status (bitfield - expand in M2 status task)
-    stunned: bool = false,
-    bleeding: bool = false,
+    // Status effects
+    status: status_mod.StatusSet = status_mod.StatusSet.init(),
 
     pub fn isAlive(self: *const Enemy) bool {
         return self.alive and self.hp > 0;
