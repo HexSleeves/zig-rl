@@ -144,6 +144,7 @@ pub fn executeAction(action: Action, run: *RunState) !void {
                     const msg = try std.fmt.bufPrint(&buf, "The {s} dies.", .{enemy_name});
                     try run.log.add(msg);
                     run.scheduler.removeActor(target_id);
+                    run.kills += 1;
                 }
             } else {
                 try run.log.add("You swing at nothing.");
@@ -247,6 +248,7 @@ pub fn executeAction(action: Action, run: *RunState) !void {
                     inst.owner = ids.player_actor_id;
                     inst.x = -1;
                     inst.y = -1;
+                    run.items_found += 1;
                     var buf: [64]u8 = undefined;
                     const msg = try std.fmt.bufPrint(&buf, "You pick up the {s}.", .{def.name});
                     try run.log.add(msg);

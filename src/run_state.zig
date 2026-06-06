@@ -32,6 +32,8 @@ pub const RunState = struct {
     rng: rng_mod.Rng,
     visibility: visibility_mod.VisibilityMap,
     alert_level: u8 = 0,
+    kills: u32 = 0,
+    items_found: u32 = 0,
     rooms: [procgen.max_rooms]procgen.Room,
     room_count: usize,
 

@@ -4,6 +4,7 @@ const actions = @import("actions.zig");
 const ids = @import("ids.zig");
 const turn = @import("systems/turn.zig");
 const energy_scheduler = @import("energy_scheduler.zig");
+const campaign_state = @import("campaign_state.zig");
 
 pub const Game = struct {
     state: State,
@@ -25,7 +26,7 @@ pub const Game = struct {
         // Quit is handled at the State level before validation/execution
         if (intent == .quit) {
             self.state.quit_requested = true;
-            self.state.current_mode = .game_over;
+            self.state.endRun(.quit);
             return;
         }
 
@@ -48,6 +49,12 @@ pub const Game = struct {
                 const cost = try turn.endActorTurn(&self.state.run, slot.id);
                 self.state.run.scheduler.deductCost(slot.id, cost);
             }
+        }
+
+        // Detect player death after enemy turns
+        if (self.state.run.player.hp <= 0) {
+            self.state.endRun(.operative_death);
+            return;
         }
 
         // Tick cameras and alert decay

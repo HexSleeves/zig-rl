@@ -10,6 +10,11 @@ pub const game_mode = @import("game_mode.zig");
 pub const State = @import("state.zig").State;
 pub const RunState = @import("run_state.zig").RunState;
 pub const CampaignState = @import("campaign_state.zig").CampaignState;
+pub const RunOutcome = @import("campaign_state.zig").RunOutcome;
+pub const RunRecord = @import("campaign_state.zig").RunRecord;
+pub const OperativeBackground = @import("campaign_state.zig").OperativeBackground;
+pub const FacilityWing = @import("campaign_state.zig").FacilityWing;
+pub const WingStatus = @import("campaign_state.zig").WingStatus;
 pub const Game = @import("game.zig").Game;
 
 pub const world = struct {
