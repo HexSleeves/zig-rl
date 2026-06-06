@@ -340,3 +340,56 @@ test "same faction not hostile to itself" {
     try std.testing.expect(!factions.isHostile(factions.SECURITY, factions.SECURITY));
     try std.testing.expect(!factions.isHostile(factions.ROGUE_MACHINES, factions.ROGUE_MACHINES));
 }
+
+// ---------------------------------------------------------------------------
+// M3 FOV / visibility tests
+// ---------------------------------------------------------------------------
+
+test "FOV: origin tile is visible after compute" {
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+
+    // Player starts at (player_start_x, player_start_y); FOV is computed in init.
+    try std.testing.expect(run.visibility.isVisible(config.player_start_x, config.player_start_y));
+}
+
+test "FOV: explored tiles persist after player moves" {
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+
+    // After init the player's start tile is explored.
+    const start_x = config.player_start_x;
+    const start_y = config.player_start_y;
+    try std.testing.expect(run.visibility.isExplored(start_x, start_y));
+
+    // Move player east and recompute FOV.
+    run.player.position.x += 1;
+    run.recomputeFov();
+
+    // The original start tile should still be explored (persisted).
+    try std.testing.expect(run.visibility.isExplored(start_x, start_y));
+}
+
+test "FOV: wall tile adjacent to player is visible" {
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+
+    // Player spawns at (1, 2). The boundary wall column x=0 is adjacent.
+    // FOV is computed in init so the wall at (0, player_start_y) should be visible.
+    try std.testing.expect(run.visibility.isVisible(0, config.player_start_y));
+}
+
+// ---------------------------------------------------------------------------
+// M3 Alert level tests
+// ---------------------------------------------------------------------------
+
+test "alert_level: raiseAlert clamps to 100" {
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+
+    run.raiseAlert(60);
+    try std.testing.expectEqual(@as(u8, 60), run.alert_level);
+
+    run.raiseAlert(60);
+    try std.testing.expectEqual(@as(u8, 100), run.alert_level);
+}
