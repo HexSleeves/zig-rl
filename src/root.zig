@@ -54,6 +54,12 @@ pub const ui = struct {
         pub const map_view = @import("ui/panels/map_view.zig");
         pub const vitals = @import("ui/panels/vitals.zig");
     };
+
+    pub const screens = struct {
+        pub const game_over = @import("ui/screens/game_over.zig");
+        pub const inventory = @import("ui/screens/inventory.zig");
+        pub const main_menu = @import("ui/screens/main_menu.zig");
+    };
 };
 
 pub const stores = struct {
