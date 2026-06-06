@@ -40,6 +40,7 @@ pub const systems = struct {
 pub const ui = struct {
     pub const hud = @import("ui/hud.zig");
     pub const log = @import("ui/log.zig");
+    pub const theme = @import("ui/theme.zig");
 };
 
 pub const stores = struct {
