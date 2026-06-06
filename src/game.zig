@@ -49,5 +49,21 @@ pub const Game = struct {
                 self.state.run.scheduler.deductCost(slot.id, cost);
             }
         }
+
+        // Tick cameras and alert decay
+        self.state.run.tickCameras();
+        self.state.run.tickAlertDecay();
+
+        // Lockdown: alert >= 80 locks all closed doors
+        if (self.state.run.alert_level >= 80) {
+            var j: usize = 0;
+            while (j < self.state.run.objects.count) : (j += 1) {
+                const obj = &self.state.run.objects.objects[j];
+                if (!obj.alive) continue;
+                if (obj.kind == .door and obj.state == .closed) {
+                    obj.state = .locked;
+                }
+            }
+        }
     }
 };
