@@ -88,7 +88,7 @@ pub fn executeAction(action: Action, run: *RunState) !void {
         .melee_bump => |dir| {
             _ = dir; // direction unused until M2 combat
             try run.log.add("You bump into the enemy.");
-            run.turn_count += 1;
+            try turn.endPlayerTurn(run);
         },
         .quit => {}, // handled at State level
     }
@@ -117,4 +117,59 @@ test "ActionCost shoot" {
 test "ActionCost hack" {
     const std = @import("std");
     try std.testing.expectEqual(@as(u32, 150), ActionCost.hack);
+}
+
+// ---------------------------------------------------------------------------
+// intentFromCommand tests
+// ---------------------------------------------------------------------------
+
+test "intentFromCommand returns null for none" {
+    try @import("std").testing.expect(intentFromCommand(.none) == null);
+}
+
+test "intentFromCommand maps move to intent_move" {
+    const intent = intentFromCommand(.{ .move = .north }).?;
+    try @import("std").testing.expectEqual(ActionIntent{ .move = .north }, intent);
+}
+
+test "intentFromCommand maps wait to intent_wait" {
+    const intent = intentFromCommand(.wait).?;
+    try @import("std").testing.expectEqual(ActionIntent.wait, intent);
+}
+
+// ---------------------------------------------------------------------------
+// validateIntent tests
+// ---------------------------------------------------------------------------
+
+test "validateIntent: move into wall returns null" {
+    const std = @import("std");
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+    // Player starts at (player_start_x=1, player_start_y=2).
+    // Moving west → x=0 which is the boundary wall.
+    const result = validateIntent(.{ .move = .west }, &run);
+    try std.testing.expect(result == null);
+}
+
+test "validateIntent: move into open floor returns move action" {
+    const std = @import("std");
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+    // Player starts at (1, 2). Moving east → (2, 2) is inside room 1..17 x 1..10, open floor.
+    const result = validateIntent(.{ .move = .east }, &run);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqual(Action{ .move = .east }, result.?);
+}
+
+test "validateIntent: move into enemy upgrades to melee_bump" {
+    const std = @import("std");
+    var run = try RunState.init(std.testing.allocator);
+    defer run.deinit();
+    // RunState.init places enemy 1 at (28, 10).
+    // Move player to (27, 10), one tile west of that enemy.
+    run.player.position = .{ .x = 27, .y = 10 };
+    // Moving east from (27,10) → (28,10) where the enemy stands.
+    const result = validateIntent(.{ .move = .east }, &run);
+    try std.testing.expect(result != null);
+    try std.testing.expectEqual(Action{ .melee_bump = .east }, result.?);
 }

@@ -27,6 +27,8 @@ pub const MoveResult = enum {
 /// Move the player using a RunState pointer directly.
 pub fn tryMovePlayerRun(run: *RunState, direction: Direction) !MoveResult {
     const next = run.player.position.translated(direction.delta());
+    // Safety guard: redundant when called via executeAction (validateIntent checks first),
+    // but needed for direct callers like tests.
     if (run.map.isBlockedAt(next.x, next.y)) {
         try run.log.add("You run into a wall.");
         return .blocked;
