@@ -1,4 +1,7 @@
 const movement = @import("systems/movement.zig");
+const input = @import("input.zig");
+const RunState = @import("run_state.zig").RunState;
+const turn = @import("systems/turn.zig");
 
 pub const Direction = movement.Direction;
 
@@ -38,6 +41,57 @@ pub fn costOf(action: Action) u32 {
         .melee_bump => ActionCost.melee,
         .quit => 0,
     };
+}
+
+/// Convert an input Command to an ActionIntent.
+/// Returns null for .none (no-op inputs).
+pub fn intentFromCommand(cmd: input.Command) ?ActionIntent {
+    return switch (cmd) {
+        .move => |dir| .{ .move = dir },
+        .wait => .wait,
+        .quit => .quit,
+        .none => null,
+    };
+}
+
+/// Validate an ActionIntent against the current RunState.
+/// Returns a ready-to-execute Action, or null if the action is impossible
+/// (e.g. moving into a wall).
+pub fn validateIntent(intent: ActionIntent, run: *const RunState) ?Action {
+    return switch (intent) {
+        .move => |dir| blk: {
+            const delta = movement.Direction.delta(dir);
+            const new_x = run.player.position.x + delta.x;
+            const new_y = run.player.position.y + delta.y;
+            if (run.map.isBlockedAt(new_x, new_y)) break :blk null;
+            // Enemy present at target tile: becomes a melee bump instead
+            if (run.actors.glyphAt(new_x, new_y) != null) break :blk .{ .melee_bump = dir };
+            break :blk .{ .move = dir };
+        },
+        .wait => .wait,
+        .melee_bump => |dir| .{ .melee_bump = dir },
+        .quit => .quit,
+    };
+}
+
+/// Execute a validated Action against RunState.
+/// Quit must be handled at the State level before calling this.
+pub fn executeAction(action: Action, run: *RunState) !void {
+    switch (action) {
+        .move => |dir| {
+            _ = try movement.tryMovePlayerRun(run, dir);
+        },
+        .wait => {
+            try run.log.add("You wait.");
+            try turn.endPlayerTurn(run);
+        },
+        .melee_bump => |dir| {
+            _ = dir; // direction unused until M2 combat
+            try run.log.add("You bump into the enemy.");
+            run.turn_count += 1;
+        },
+        .quit => {}, // handled at State level
+    }
 }
 
 test "costOf wait" {
