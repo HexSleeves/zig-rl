@@ -54,6 +54,7 @@ pub const Game = struct {
         // Detect player death after enemy turns
         if (self.state.run.player.hp <= 0) {
             self.state.endRun(.operative_death);
+            self.state.current_mode = .game_over;
             return;
         }
 

@@ -21,13 +21,21 @@ pub const State = struct {
             .allocator = allocator,
             .run = try RunState.init(allocator),
             .campaign = CampaignState.init(),
-            .current_mode = .running,
+            .current_mode = .main_menu,
             .quit_requested = false,
         };
     }
 
     pub fn deinit(self: *State) void {
         self.run.deinit();
+    }
+
+    /// Discard the current run and start a fresh one.
+    pub fn startRun(self: *State) !void {
+        self.run.deinit();
+        self.run = try RunState.init(self.allocator);
+        try self.run.log.add("Explore the facility.");
+        self.current_mode = .running;
     }
 
     /// Record the end of the current run into campaign state.
