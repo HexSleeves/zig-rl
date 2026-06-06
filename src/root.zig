@@ -1,7 +1,12 @@
 pub const config = @import("config.zig");
+pub const rng = @import("rng.zig");
+pub const ids = @import("ids.zig");
 pub const input = @import("input.zig");
 pub const render = @import("render.zig");
+pub const game_mode = @import("game_mode.zig");
 pub const State = @import("state.zig").State;
+pub const RunState = @import("run_state.zig").RunState;
+pub const CampaignState = @import("campaign_state.zig").CampaignState;
 
 pub const world = struct {
     pub const tile = @import("world/tile.zig");
@@ -24,4 +29,9 @@ pub const systems = struct {
 pub const ui = struct {
     pub const hud = @import("ui/hud.zig");
     pub const log = @import("ui/log.zig");
+};
+
+pub const stores = struct {
+    pub const actor_store = @import("stores/actor_store.zig");
+    pub const item_store = @import("stores/item_store.zig");
 };

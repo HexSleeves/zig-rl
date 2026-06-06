@@ -33,6 +33,7 @@ const InputState = struct {
     east: bool = false,
     wait: bool = false,
     quit: bool = false,
+    debug_toggle: bool = false,
 };
 
 pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
@@ -61,11 +62,17 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
     var input_state = InputState{};
     var frames_rendered: u32 = 0;
+    var show_debug_panel: bool = true;
+    var last_frame_time: f64 = zglfw.getTime();
+    var fps: f32 = 0.0;
 
     while (!window.shouldClose() and !game.state.quit_requested) {
         zglfw.pollEvents();
         if (readCommand(window, &input_state)) |command| {
             try game.handle(command);
+        }
+        if (pressedOne(window, &input_state.debug_toggle, .F1)) {
+            show_debug_panel = !show_debug_panel;
         }
 
         const fb_size = window.getFramebufferSize();
@@ -75,10 +82,15 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
         const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
-        drawGame(game, l);
+        drawGame(game, l, show_debug_panel, fps);
         zgui.backend.draw();
 
         window.swapBuffers();
+
+        const now = zglfw.getTime();
+        const dt = now - last_frame_time;
+        if (dt > 0.0) fps = @floatCast(1.0 / dt);
+        last_frame_time = now;
 
         frames_rendered += 1;
         if (smoke_frame_limit) |smoke_frames| {
@@ -113,13 +125,21 @@ fn pressedAny(window: *zglfw.Window, previous: *bool, keys: []const zglfw.Key) b
     return current and !previous.*;
 }
 
-fn drawGame(game: *const Game, l: render.Layout) void {
+fn pressedOne(window: *zglfw.Window, previous: *bool, key: zglfw.Key) bool {
+    const action = window.getKey(key);
+    const current = action == .press or action == .repeat;
+    defer previous.* = current;
+    return current and !previous.*;
+}
+
+fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, fps: f32) void {
     zgui.pushFont(null, base_font_size * l.scale);
     defer zgui.popFont();
 
     drawMap(game, l);
     drawHud(game, l);
     drawLog(game, l);
+    if (show_debug) drawDebug(game, fps);
 }
 
 fn drawHud(game: *const Game, l: render.Layout) void {
@@ -130,7 +150,7 @@ fn drawHud(game: *const Game, l: render.Layout) void {
         zgui.sameLine(.{});
         zgui.textDisabled("WASD/HJKL/arrows move   . waits   Q/Esc quits", .{});
         zgui.sameLine(.{ .spacing = 32 });
-        zgui.text("Turn {d}", .{game.state.turn_count});
+        zgui.text("Turn {d}", .{game.state.run.turn_count});
     }
     zgui.end();
 }
@@ -144,12 +164,12 @@ fn drawMap(game: *const Game, l: render.Layout) void {
     });
 
     var y: usize = 0;
-    while (y < game.state.map.height) : (y += 1) {
+    while (y < game.state.run.map.height) : (y += 1) {
         var x: usize = 0;
-        while (x < game.state.map.width) : (x += 1) {
+        while (x < game.state.run.map.width) : (x += 1) {
             const px = l.map_origin_x + @as(i32, @intCast(x)) * l.tile_size;
             const py = l.map_origin_y + @as(i32, @intCast(y)) * l.tile_size;
-            const color = switch (game.state.map.get(x, y).kind) {
+            const color = switch (game.state.run.map.get(x, y).kind) {
                 .wall => palette.wall,
                 .floor => palette.floor,
             };
@@ -157,15 +177,13 @@ fn drawMap(game: *const Game, l: render.Layout) void {
         }
     }
 
-    var i: usize = 0;
-    while (i < game.state.enemy_count) : (i += 1) {
-        const enemy = game.state.enemies[i];
+    for (game.state.run.actors.enemiesSlice()) |enemy| {
         if (enemy.alive) {
-            drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, "g");
+            drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, &[_]u8{enemy.glyph});
         }
     }
 
-    drawActor(draw_list, game.state.player.position.x, game.state.player.position.y, l, palette.player, "@");
+    drawActor(draw_list, game.state.run.player.position.x, game.state.run.player.position.y, l, palette.player, "@");
 }
 
 fn drawTile(draw_list: zgui.DrawList, x: i32, y: i32, size: i32, color: u32) void {
@@ -205,9 +223,23 @@ fn drawLog(game: *const Game, l: render.Layout) void {
     if (zgui.begin("Messages", .{ .flags = fixedPanelFlags() })) {
         zgui.textColored(colorFloats(palette.text), "Messages", .{});
         var i: usize = 0;
-        while (i < game.state.log.count()) : (i += 1) {
-            zgui.textColored(colorFloats(palette.muted), "- {s}", .{game.state.log.at(i)});
+        while (i < game.state.run.log.count()) : (i += 1) {
+            zgui.textColored(colorFloats(palette.muted), "- {s}", .{game.state.run.log.at(i)});
         }
+    }
+    zgui.end();
+}
+
+fn drawDebug(game: *const Game, fps: f32) void {
+    const run_state = &game.state.run;
+    const actor_count = run_state.actors.enemyCount() + 1; // +1 for player
+    if (zgui.begin("Debug", .{ .flags = .{ .no_saved_settings = true } })) {
+        zgui.text("Seed:   {d}", .{run_state.run_seed});
+        zgui.text("Floor:  {d}", .{run_state.current_floor});
+        zgui.text("Actors: {d}", .{actor_count});
+        zgui.text("Turn:   {d}", .{run_state.turn_count});
+        zgui.text("Mode:   {s}", .{@tagName(game.state.current_mode)});
+        zgui.text("FPS:    {d:.1}", .{fps});
     }
     zgui.end();
 }
