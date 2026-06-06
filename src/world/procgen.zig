@@ -72,6 +72,12 @@ pub const GeneratedFloor = struct {
     room_count: usize,
     spawns: [max_spawns]SpawnPoint,
     spawn_count: usize,
+    door_positions: [max_rooms]struct { x: usize, y: usize },
+    door_count: usize,
+    terminal_positions: [max_rooms]struct { x: usize, y: usize },
+    terminal_count: usize,
+    camera_positions: [max_rooms]struct { x: usize, y: usize, facing: u8 },
+    camera_count: usize,
 };
 
 const min_room_w: usize = 4;
@@ -93,6 +99,12 @@ pub fn generate(rng: *rng_mod.Rng, floor_num: u32) GeneratedFloor {
         .room_count = 0,
         .spawns = undefined,
         .spawn_count = 0,
+        .door_positions = undefined,
+        .door_count = 0,
+        .terminal_positions = undefined,
+        .terminal_count = 0,
+        .camera_positions = undefined,
+        .camera_count = 0,
     };
 
     // Place rooms
@@ -132,7 +144,7 @@ pub fn generate(rng: *rng_mod.Rng, floor_num: u32) GeneratedFloor {
     // Connect each room to the next with an L-shaped corridor
     var i: usize = 1;
     while (i < result.room_count) : (i += 1) {
-        connectRooms(&result.map, rng, result.rooms[i - 1], result.rooms[i]);
+        connectRooms(&result, rng, result.rooms[i - 1], result.rooms[i]);
     }
 
     // Assign zone types and room flags
@@ -140,6 +152,26 @@ pub fn generate(rng: *rng_mod.Rng, floor_num: u32) GeneratedFloor {
         const zone_idx = (floor_num + @as(u32, @intCast(idx))) % zone_cycle.len;
         room.zone = zone_cycle[zone_idx];
         room.flags = flagsForZone(room.zone);
+    }
+
+    // Place terminals in terminal rooms, cameras in security/combat rooms
+    for (result.rooms[0..result.room_count]) |room| {
+        const cx = room.centerX();
+        const cy = room.centerY();
+        if (room.flags.terminal) {
+            if (result.terminal_count < max_rooms) {
+                const tx = if (cx + 1 < room.x + room.w) cx + 1 else cx;
+                result.terminal_positions[result.terminal_count] = .{ .x = tx, .y = cy };
+                result.terminal_count += 1;
+            }
+        }
+        if (room.flags.combat or room.zone == .security) {
+            if (result.camera_count < max_rooms) {
+                const camx = if (cx > room.x) cx - 1 else cx;
+                result.camera_positions[result.camera_count] = .{ .x = camx, .y = cy, .facing = 2 };
+                result.camera_count += 1;
+            }
+        }
     }
 
     // Player spawn: first room center
@@ -209,17 +241,29 @@ fn digRoom(map: *map_mod.Map, room: Room) void {
     }
 }
 
-fn connectRooms(map: *map_mod.Map, rng: *rng_mod.Rng, a: Room, b: Room) void {
+fn connectRooms(result: *GeneratedFloor, rng: *rng_mod.Rng, a: Room, b: Room) void {
     const ax = a.centerX();
     const ay = a.centerY();
     const bx = b.centerX();
     const by = b.centerY();
+    var elbow_x: usize = 0;
+    var elbow_y: usize = 0;
     if (rng.nextBounded(u32, 2) == 0) {
-        digHorizontalTunnel(map, ax, bx, ay);
-        digVerticalTunnel(map, ay, by, bx);
+        digHorizontalTunnel(&result.map, ax, bx, ay);
+        digVerticalTunnel(&result.map, ay, by, bx);
+        elbow_x = bx;
+        elbow_y = ay;
     } else {
-        digVerticalTunnel(map, ay, by, ax);
-        digHorizontalTunnel(map, ax, bx, by);
+        digVerticalTunnel(&result.map, ay, by, ax);
+        digHorizontalTunnel(&result.map, ax, bx, by);
+        elbow_x = ax;
+        elbow_y = by;
+    }
+    // Place door at elbow if it's a floor tile and not a room center
+    const not_a_center = !a.contains(elbow_x, elbow_y) and !b.contains(elbow_x, elbow_y);
+    if (not_a_center and result.door_count < max_rooms) {
+        result.door_positions[result.door_count] = .{ .x = elbow_x, .y = elbow_y };
+        result.door_count += 1;
     }
 }
 
