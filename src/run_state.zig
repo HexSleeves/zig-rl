@@ -2,16 +2,20 @@ const std = @import("std");
 const config = @import("config.zig");
 const procgen = @import("world/procgen.zig");
 const map_mod = @import("world/map.zig");
+const tile_mod = @import("world/tile.zig");
 const player_mod = @import("entities/player.zig");
 const enemy_mod = @import("entities/enemy.zig");
 const log_mod = @import("ui/log.zig");
 const actor_store = @import("stores/actor_store.zig");
 const item_store = @import("stores/item_store.zig");
+const object_store = @import("stores/object_store.zig");
+const map_object = @import("world/map_object.zig");
 const loot_table = @import("items/loot_table.zig");
 const energy_scheduler = @import("energy_scheduler.zig");
 const rng_mod = @import("rng.zig");
 const factions = @import("factions.zig");
 const visibility_mod = @import("visibility.zig");
+const combat_mod = @import("systems/combat.zig");
 
 /// RunState holds all data for a single dungeon run.
 pub const RunState = struct {
@@ -19,6 +23,7 @@ pub const RunState = struct {
     player: player_mod.Player,
     actors: actor_store.ActorStore,
     items: item_store.ItemStore,
+    objects: object_store.ObjectStore,
     turn_count: u64,
     log: log_mod.MessageLog,
     current_floor: u32,
@@ -90,14 +95,45 @@ pub const RunState = struct {
             }
         }
 
+        // Place map objects from procgen
+        var objects = object_store.ObjectStore.init();
+
+        // Copy map so we can mutate it
+        var run_map = floor.map;
+
+        // Doors at corridor elbows
+        for (floor.door_positions[0..floor.door_count]) |dp| {
+            const t = run_map.get(dp.x, dp.y);
+            if (t.kind == .floor) {
+                run_map.set(dp.x, dp.y, tile_mod.Tile.door_closed());
+                _ = objects.addObject(@intCast(dp.x), @intCast(dp.y), .door, .closed, 3);
+            }
+        }
+
+        // Terminals
+        for (floor.terminal_positions[0..floor.terminal_count]) |tp| {
+            _ = objects.addObject(@intCast(tp.x), @intCast(tp.y), .terminal, .closed, 5);
+        }
+
+        // Cameras
+        for (floor.camera_positions[0..floor.camera_count]) |cp| {
+            if (objects.addObject(@intCast(cp.x), @intCast(cp.y), .camera, .closed, 4)) |cam_id| {
+                if (objects.getObjectMut(cam_id)) |cam| {
+                    cam.facing = cp.facing;
+                }
+            }
+        }
+
         var vis = visibility_mod.VisibilityMap.init();
-        vis.compute(&floor.map, player_x, player_y, FOV_RADIUS);
+        vis.compute(&run_map, player_x, player_y, FOV_RADIUS);
+
 
         return RunState{
-            .map = floor.map,
+            .map = run_map,
             .player = .{ .position = .{ .x = player_x, .y = player_y } },
             .actors = actors,
             .items = items,
+            .objects = objects,
             .turn_count = 0,
             .log = log_mod.MessageLog.init(allocator),
             .current_floor = 1,
@@ -120,6 +156,65 @@ pub const RunState = struct {
 
     pub fn raiseAlert(self: *RunState, amount: u8) void {
         self.alert_level = @min(100, self.alert_level + amount);
+    }
+
+    pub fn isPassable(self: *const RunState, x: i32, y: i32) bool {
+        return !self.map.isBlockedAt(x, y);
+    }
+
+    /// Tick cameras: powered cameras raise alert if player is in their cone.
+    pub fn tickCameras(self: *RunState) void {
+        const px = self.player.position.x;
+        const py = self.player.position.y;
+        var i: usize = 0;
+        while (i < self.objects.count) : (i += 1) {
+            const obj = &self.objects.objects[i];
+            if (!obj.alive or obj.kind != .camera or !obj.powered) continue;
+            if (obj.state == .disabled) continue;
+            // facing: 0=N(dy-1),2=E(dx+1),4=S(dy+1),6=W(dx-1)
+            const facing = obj.facing;
+            var dist: i32 = 1;
+            while (dist <= 5) : (dist += 1) {
+                // Check center and ±1 perpendicular tile at each distance
+                var perp: i32 = -1;
+                while (perp <= 1) : (perp += 1) {
+                    const cx = obj.x + switch (facing) {
+                        0 => perp,
+                        1 => dist,
+                        2 => dist,
+                        3 => dist,
+                        4 => perp,
+                        5 => -dist,
+                        6 => -dist,
+                        7 => -dist,
+                        else => @as(i32, 0),
+                    };
+                    const cy = obj.y + switch (facing) {
+                        0 => -dist,
+                        1 => -dist,
+                        2 => perp,
+                        3 => dist,
+                        4 => dist,
+                        5 => dist,
+                        6 => perp,
+                        7 => -dist,
+                        else => @as(i32, 0),
+                    };
+                    if (cx == px and cy == py) {
+                        if (combat_mod.hasLineOfSight(&self.map, obj.x, obj.y, px, py)) {
+                            self.raiseAlert(8);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn tickAlertDecay(self: *RunState) void {
+        if (self.alert_level > 0) {
+            self.alert_level -= 1;
+        }
     }
 
     /// Get the glyph of a living enemy at (x, y), or null if none.

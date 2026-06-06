@@ -17,6 +17,7 @@ pub const world = struct {
     pub const map = @import("world/map.zig");
     pub const generation = @import("world/generation.zig");
     pub const procgen = @import("world/procgen.zig");
+    pub const map_object = @import("world/map_object.zig");
 };
 
 pub const entities = struct {
@@ -39,6 +40,7 @@ pub const ui = struct {
 pub const stores = struct {
     pub const actor_store = @import("stores/actor_store.zig");
     pub const item_store = @import("stores/item_store.zig");
+    pub const object_store = @import("stores/object_store.zig");
 };
 
 pub const items = struct {
