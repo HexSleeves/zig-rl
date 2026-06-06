@@ -11,6 +11,7 @@ pub const player_start_y: i32 = 2;
 
 pub const max_enemies: usize = 4;
 pub const max_items: usize = 64;
+pub const max_objects: usize = 32;
 pub const max_log_messages: usize = 5;
 
 pub const asset_root = "assets";

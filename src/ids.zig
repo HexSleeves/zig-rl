@@ -38,6 +38,9 @@ pub const AbilityId = makeId("AbilityId");
 /// Identifies status effects
 pub const EffectId = makeId("EffectId");
 
+/// Identifies map objects (doors, terminals, cameras, etc.)
+pub const ObjectId = makeId("ObjectId");
+
 /// The player is always actor 0
 pub const player_actor_id = ActorId{ .value = 0 };
 
@@ -73,4 +76,5 @@ test "all Id types: invalid sentinel is not valid" {
     try std.testing.expect(!FactionId.invalid.isValid());
     try std.testing.expect(!AbilityId.invalid.isValid());
     try std.testing.expect(!EffectId.invalid.isValid());
+    try std.testing.expect(!ObjectId.invalid.isValid());
 }
