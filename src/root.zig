@@ -9,6 +9,7 @@ pub const game_mode = @import("game_mode.zig");
 pub const State = @import("state.zig").State;
 pub const RunState = @import("run_state.zig").RunState;
 pub const CampaignState = @import("campaign_state.zig").CampaignState;
+pub const Game = @import("game.zig").Game;
 
 pub const world = struct {
     pub const tile = @import("world/tile.zig");
