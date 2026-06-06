@@ -1,4 +1,5 @@
 pub const actions = @import("actions.zig");
+pub const factions = @import("factions.zig");
 pub const config = @import("config.zig");
 pub const energy_scheduler = @import("energy_scheduler.zig");
 pub const rng = @import("rng.zig");
@@ -38,3 +39,5 @@ pub const stores = struct {
     pub const actor_store = @import("stores/actor_store.zig");
     pub const item_store = @import("stores/item_store.zig");
 };
+
+pub const status = @import("status.zig");
