@@ -20,6 +20,7 @@ Tests: 33 integration (tests/simulation.zig) + 96 inline = all passing (`zig bui
 | M6 | Hacking | ObjectStore, door tiles (block move+sight), interact/hack actions, camera alerts, alert decay, lockdown |
 | M7 | Campaign | CampaignState: RunOutcome/RunRecord, OperativeBackground, FacilityWing/WingStatus, unlock pool, glossary, lore, run history, endRun() integration |
 | M8 | Save/Load | src/save/save.zig: SAVE_VERSION=1, ZRLC/ZRLR/ZRLY magic, field-by-field binary serialization, crash-safe atomic writes (.tmp→sync→rename), Rng.getState/setState, saveCampaign/loadCampaign/saveRun/loadRun/saveReplayHeader |
+| M9 | UI revamp | In-screen facility-OS UI on zgui draw-lists (no gameplay imgui windows; Debug F1 kept as sole dev window). New `src/ui/`: theme (cyan-on-dark palette + alert hazard ramp + lerp/dim/withAlpha), camera (follow + tile↔screen, clamp/center), layout (region rects + window sizing + `so()` HiDPI offset scaler), draw (panel/bar/glyph/glow/scanlines/vignette + corner brackets), panels (header/vitals/loadout/inspect/log_panel/map_view), screens (main_menu/game_over/inventory), scene (composer + Anim). Follow camera, mouse hover-inspect with nearest-hostile fallback, FOV tri-state, threat-colored enemies, alert-driven frame recolor + scanlines/vignette/sync-glitch/lockdown-pulse FX, HiDPI-scaled throughout. Modes: boot→main_menu, death→game_over, `State.startRun()`. Removed `render.zig` + `ui/hud.zig`. Plan/spec: `docs/superpowers/{plans,specs}/2026-06-06-ui-revamp*.md` |
 
 ---
 
