@@ -1,3 +1,4 @@
+const std = @import("std");
 const State = @import("../state.zig").State;
 const RunState = @import("../run_state.zig").RunState;
 const ids = @import("../ids.zig");
@@ -39,7 +40,16 @@ pub fn endActorTurn(run: *RunState, actor_id: ids.ActorId) !u32 {
             const ny = enemy.position.y + delta.y;
             // Moving into player tile → melee instead of occupying
             if (nx == run.player.position.x and ny == run.player.position.y) {
-                _ = try combat.enemyMeleeAttack(run, actor_id);
+                const result = try combat.enemyMeleeAttack(run, actor_id);
+                if (result.hit) {
+                    var buf: [64]u8 = undefined;
+                    const msg = std.fmt.bufPrint(&buf, "The {s} hits you for {d}.", .{ enemy.name, result.damage }) catch "An enemy hits you.";
+                    try run.log.add(msg);
+                } else {
+                    var buf: [64]u8 = undefined;
+                    const msg = std.fmt.bufPrint(&buf, "The {s} misses you.", .{enemy.name}) catch "An enemy misses you.";
+                    try run.log.add(msg);
+                }
                 break :blk ActionCost.melee;
             }
             // Don't stack onto another enemy
@@ -51,7 +61,16 @@ pub fn endActorTurn(run: *RunState, actor_id: ids.ActorId) !u32 {
         },
         .melee_attack => blk: {
             // Enemy attacks player
-            _ = try combat.enemyMeleeAttack(run, actor_id);
+            const result = try combat.enemyMeleeAttack(run, actor_id);
+            if (result.hit) {
+                var buf: [64]u8 = undefined;
+                const msg = std.fmt.bufPrint(&buf, "The {s} hits you for {d}.", .{ enemy.name, result.damage }) catch "An enemy hits you.";
+                try run.log.add(msg);
+            } else {
+                var buf: [64]u8 = undefined;
+                const msg = std.fmt.bufPrint(&buf, "The {s} misses you.", .{enemy.name}) catch "An enemy misses you.";
+                try run.log.add(msg);
+            }
             break :blk ActionCost.melee;
         },
     };

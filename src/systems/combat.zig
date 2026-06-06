@@ -147,7 +147,10 @@ pub fn enemyMeleeAttack(run: *RunState, attacker_id: ids.ActorId) !MeleeResult {
     const raw_damage = run.rng.nextRange(u32, 1, 8);
     const final_damage: u32 = if (raw_damage > 0) raw_damage else 1;
 
-    // Player HP not tracked yet (M5) — return result without modifying player
+    // Apply damage to player
+    run.player.hp -= @as(i32, @intCast(final_damage));
+    if (run.player.hp <= 0) run.player.hp = 0;
+
     return MeleeResult{
         .hit = true,
         .damage = final_damage,
