@@ -5,6 +5,7 @@ pub const Command = union(enum) {
     wait,
     quit,
     pickup,
+    hack,
     none,
 };
 
@@ -12,11 +13,12 @@ pub fn parse(byte: u8) Command {
     return switch (byte) {
         'w', 'W', 'k', 'K' => .{ .move = .north },
         's', 'S', 'j', 'J' => .{ .move = .south },
-        'a', 'A', 'h', 'H' => .{ .move = .west },
-        'd', 'D', 'l', 'L' => .{ .move = .east },
+        'a', 'A', 'l', 'L' => .{ .move = .west },
+        'd', 'D' => .{ .move = .east },
         '.', ' ' => .wait,
         'q', 'Q' => .quit,
         'g', 'G' => .pickup,
+        'h', 'H' => .hack,
         else => .none,
     };
 }

@@ -6,6 +6,8 @@ const turn = @import("systems/turn.zig");
 const combat = @import("systems/combat.zig");
 const ids = @import("ids.zig");
 const item_def = @import("items/item_def.zig");
+const tile_mod = @import("world/tile.zig");
+const map_object = @import("world/map_object.zig");
 
 pub const Direction = movement.Direction;
 
@@ -18,6 +20,8 @@ pub const ActionIntent = union(enum) {
     quit,
     pickup,
     use_item: ids.ItemId,
+    interact: Direction,
+    hack,
 };
 
 /// Validated, ready-to-execute form.
@@ -28,6 +32,8 @@ pub const Action = union(enum) {
     quit,
     pickup,
     use_item: ids.ItemId,
+    interact: Direction,
+    hack,
 };
 
 /// Energy costs per action type.
@@ -50,6 +56,8 @@ pub fn costOf(action: Action) u32 {
         .quit => 0,
         .pickup => ActionCost.move,
         .use_item => ActionCost.wait,
+        .interact => ActionCost.move,
+        .hack => ActionCost.hack,
     };
 }
 
@@ -61,6 +69,7 @@ pub fn intentFromCommand(cmd: input.Command) ?ActionIntent {
         .wait => .wait,
         .quit => .quit,
         .pickup => .pickup,
+        .hack => .hack,
         .none => null,
     };
 }
@@ -74,7 +83,12 @@ pub fn validateIntent(intent: ActionIntent, run: *const RunState) ?Action {
             const delta = movement.Direction.delta(dir);
             const new_x = run.player.position.x + delta.x;
             const new_y = run.player.position.y + delta.y;
-            if (run.map.isBlockedAt(new_x, new_y)) break :blk null;
+            if (run.map.isBlockedAt(new_x, new_y)) {
+                // If blocked tile is a closed door, interact instead
+                const t = run.map.get(@intCast(new_x), @intCast(new_y));
+                if (t.kind == .door) break :blk .{ .interact = dir };
+                break :blk null;
+            }
             // Enemy present at target tile: becomes a melee bump instead
             if (run.actors.glyphAt(new_x, new_y) != null) break :blk .{ .melee_bump = dir };
             break :blk .{ .move = dir };
@@ -84,6 +98,8 @@ pub fn validateIntent(intent: ActionIntent, run: *const RunState) ?Action {
         .quit => .quit,
         .pickup => .pickup,
         .use_item => |item_id| .{ .use_item = item_id },
+        .interact => |dir| .{ .interact = dir },
+        .hack => .hack,
     };
 }
 
@@ -133,6 +149,89 @@ pub fn executeAction(action: Action, run: *RunState) !void {
                 try run.log.add("You swing at nothing.");
             }
 
+            try turn.endPlayerTurn(run);
+            run.recomputeFov();
+        },
+        .interact => |dir| {
+            const delta = movement.Direction.delta(dir);
+            const tx = run.player.position.x + delta.x;
+            const ty = run.player.position.y + delta.y;
+            if (run.objects.objectAt(tx, ty)) |obj_id| {
+                if (run.objects.getObjectMut(obj_id)) |obj| {
+                    if (obj.kind == .door) {
+                        if (obj.state == .locked) {
+                            try run.log.add("The door is locked. (hack with H)");
+                        } else {
+                            // open the door
+                            obj.state = .open;
+                            run.map.set(@intCast(tx), @intCast(ty), tile_mod.Tile.door_open());
+                            run.recomputeFov();
+                            try run.log.add("You open the door.");
+                        }
+                    }
+                }
+            } else {
+                // No object — just walk through if tile is now open
+                try run.log.add("Nothing to interact with.");
+            }
+            try turn.endPlayerTurn(run);
+            run.recomputeFov();
+        },
+        .hack => {
+            const px = run.player.position.x;
+            const py = run.player.position.y;
+            // Scan 4 adjacent tiles
+            const dirs = [_]struct { dx: i32, dy: i32 }{ .{ .dx = 0, .dy = -1 }, .{ .dx = 0, .dy = 1 }, .{ .dx = -1, .dy = 0 }, .{ .dx = 1, .dy = 0 } };
+            var hacked = false;
+            for (dirs) |d| {
+                const tx = px + d.dx;
+                const ty = py + d.dy;
+                if (run.objects.objectAt(tx, ty)) |obj_id| {
+                    if (run.objects.getObjectMut(obj_id)) |obj| {
+                        // Roll vs difficulty
+                        const threshold: u32 = @as(u32, obj.difficulty) * 10;
+                        const roll = run.rng.nextBounded(u32, 100);
+                        if (roll >= threshold) {
+                            // Success
+                            switch (obj.kind) {
+                                .door => {
+                                    obj.state = .open;
+                                    run.map.set(@intCast(tx), @intCast(ty), tile_mod.Tile.door_open());
+                                    run.recomputeFov();
+                                    try run.log.add("Door hacked open.");
+                                },
+                                .terminal => {
+                                    obj.state = .hacked;
+                                    if (run.alert_level >= 20) {
+                                        run.alert_level -= 20;
+                                    } else {
+                                        run.alert_level = 0;
+                                    }
+                                    try run.log.add("Terminal hacked. Alert -20.");
+                                },
+                                .camera => {
+                                    obj.state = .disabled;
+                                    obj.powered = false;
+                                    try run.log.add("Camera disabled.");
+                                },
+                                else => {
+                                    obj.state = .hacked;
+                                    try run.log.add("Hack successful.");
+                                },
+                            }
+                        } else {
+                            // Fail
+                            run.raiseAlert(5);
+                            try run.log.add("Hack failed!");
+                        }
+                        hacked = true;
+                        break;
+                    }
+                }
+            }
+            if (!hacked) {
+                try run.log.add("Nothing to hack.");
+            }
             try turn.endPlayerTurn(run);
             run.recomputeFov();
         },
