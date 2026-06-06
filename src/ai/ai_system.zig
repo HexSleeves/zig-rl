@@ -3,6 +3,7 @@ const ids = @import("../ids.zig");
 const RunState = @import("../run_state.zig").RunState;
 const behavior = @import("behavior.zig");
 const pathfind = @import("pathfind.zig");
+const combat = @import("../systems/combat.zig");
 
 pub const AiState = behavior.AiState;
 pub const AiMode = behavior.AiMode;
@@ -19,22 +20,6 @@ fn chebyshevDist(x1: i32, y1: i32, x2: i32, y2: i32) u32 {
     const dx = @abs(x1 - x2);
     const dy = @abs(y1 - y2);
     return @intCast(@max(dx, dy));
-}
-
-/// Simple line-of-sight: walk the primary axis and check for wall blocks.
-/// Returns true if there is a clear line between (x1,y1) and (x2,y2).
-fn hasLoS(run: *const RunState, x1: i32, y1: i32, x2: i32, y2: i32) bool {
-    var cx = x1;
-    var cy = y1;
-    const dx: i32 = if (x2 > x1) 1 else if (x2 < x1) -1 else 0;
-    const dy: i32 = if (y2 > y1) 1 else if (y2 < y1) -1 else 0;
-    while (cx != x2 or cy != y2) {
-        cx += dx;
-        cy += dy;
-        if (cx == x2 and cy == y2) break;
-        if (run.map.isBlockedAt(cx, cy)) return false;
-    }
-    return true;
 }
 
 /// Pick a random cardinal direction using run.rng.
@@ -65,7 +50,7 @@ pub fn decideAction(
     const awareness = enemy.awareness;
 
     const dist = chebyshevDist(ex, ey, px, py);
-    const player_visible = dist <= awareness and hasLoS(run, ex, ey, px, py);
+    const player_visible = dist <= awareness and combat.hasLineOfSight(&run.map, ex, ey, px, py);
 
     // HP check: switch to flee if below 25%
     const max_hp = enemy.max_hp;
