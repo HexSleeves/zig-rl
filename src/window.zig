@@ -7,6 +7,7 @@ const Game = @import("game.zig").Game;
 const config = @import("config.zig");
 const input = @import("input.zig");
 const render = @import("render.zig");
+const procgen = @import("world/procgen.zig");
 
 const gl = zopengl.bindings;
 const base_font_size: f32 = 13.0;
@@ -63,6 +64,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
     var input_state = InputState{};
     var frames_rendered: u32 = 0;
     var show_debug_panel: bool = true;
+    var show_zone_overlay: bool = false;
     var last_frame_time: f64 = zglfw.getTime();
     var fps: f32 = 0.0;
 
@@ -74,6 +76,9 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
         if (pressedOne(window, &input_state.debug_toggle, .F1)) {
             show_debug_panel = !show_debug_panel;
         }
+        if (pressedOne(window, &input_state.debug_toggle, .F2)) {
+            show_zone_overlay = !show_zone_overlay;
+        }
 
         const fb_size = window.getFramebufferSize();
         gl.viewport(0, 0, fb_size[0], fb_size[1]);
@@ -82,7 +87,7 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
         zgui.backend.newFrame(@intCast(fb_size[0]), @intCast(fb_size[1]));
         const l = render.layoutForScale(framebufferScale(base_layout, fb_size));
-        drawGame(game, l, show_debug_panel, fps);
+        drawGame(game, l, show_debug_panel, show_zone_overlay, fps);
         zgui.backend.draw();
 
         window.swapBuffers();
@@ -132,11 +137,12 @@ fn pressedOne(window: *zglfw.Window, previous: *bool, key: zglfw.Key) bool {
     return current and !previous.*;
 }
 
-fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, fps: f32) void {
+fn drawGame(game: *const Game, l: render.Layout, show_debug: bool, show_zones: bool, fps: f32) void {
     zgui.pushFont(null, base_font_size * l.scale);
     defer zgui.popFont();
 
     drawMap(game, l);
+    if (show_zones) drawZoneOverlay(game, l);
     drawHud(game, l);
     drawLog(game, l);
     if (show_debug) drawDebug(game, fps);
@@ -241,6 +247,42 @@ fn drawLog(game: *const Game, l: render.Layout) void {
         }
     }
     zgui.end();
+}
+
+fn zoneColor(zone: procgen.ZoneType) u32 {
+    return switch (zone) {
+        .habitation => 0x40_44_88_44, // green tint
+        .labs       => 0x40_44_44_aa, // blue tint
+        .reactor    => 0x40_22_66_cc, // orange tint
+        .security   => 0x40_44_44_cc, // red tint
+        .cargo      => 0x40_88_66_44, // brown tint
+        .medbay     => 0x40_88_cc_cc, // cyan tint
+        .data_core  => 0x40_cc_44_cc, // purple tint
+        .maintenance => 0x40_55_55_55, // grey tint
+    };
+}
+
+fn drawZoneOverlay(game: *const Game, l: render.Layout) void {
+    const draw_list = zgui.getBackgroundDrawList();
+    const rs = &game.state.run;
+    for (rs.rooms[0..rs.room_count]) |room| {
+        const px = l.map_origin_x + @as(i32, @intCast(room.x)) * l.tile_size;
+        const py = l.map_origin_y + @as(i32, @intCast(room.y)) * l.tile_size;
+        const pw = @as(i32, @intCast(room.w)) * l.tile_size;
+        const ph = @as(i32, @intCast(room.h)) * l.tile_size;
+        draw_list.addRectFilled(.{
+            .pmin = .{ @floatFromInt(px), @floatFromInt(py) },
+            .pmax = .{ @floatFromInt(px + pw), @floatFromInt(py + ph) },
+            .col = zoneColor(room.zone),
+        });
+        // Zone label at top-left of room
+        draw_list.addText(
+            .{ @floatFromInt(px + 2), @floatFromInt(py + 2) },
+            0xff_ff_ff_ff,
+            "{s}",
+            .{@tagName(room.zone)},
+        );
+    }
 }
 
 fn drawDebug(game: *const Game, fps: f32) void {

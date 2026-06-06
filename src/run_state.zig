@@ -1,6 +1,6 @@
 const std = @import("std");
 const config = @import("config.zig");
-const generation = @import("world/generation.zig");
+const procgen = @import("world/procgen.zig");
 const map_mod = @import("world/map.zig");
 const player_mod = @import("entities/player.zig");
 const enemy_mod = @import("entities/enemy.zig");
@@ -26,29 +26,64 @@ pub const RunState = struct {
     rng: rng_mod.Rng,
     visibility: visibility_mod.VisibilityMap,
     alert_level: u8 = 0,
+    rooms: [procgen.max_rooms]procgen.Room,
+    room_count: usize,
 
     pub const FOV_RADIUS: u32 = 8;
 
     pub fn init(allocator: std.mem.Allocator) !RunState {
         var actors = actor_store.ActorStore.init();
         var scheduler = energy_scheduler.EnergyScheduler.init();
-        const seed: u64 = 0;
+        const seed: u64 = 12345;
+        var rng = rng_mod.Rng.init(seed);
 
-        // Add 2 placeholder enemies matching previous state.zig positions
-        if (actors.addEnemy(.{ .position = .{ .x = 28, .y = 10 }, .glyph = 'g', .name = "goblin", .hp = 8, .max_hp = 8, .accuracy = 65, .armor = 0, .faction = factions.SECURITY })) |id| {
-            scheduler.addActor(id, energy_scheduler.BASE_SPEED);
-        }
-        if (actors.addEnemy(.{ .position = .{ .x = 32, .y = 14 }, .glyph = 's', .name = "sentinel", .hp = 15, .max_hp = 15, .accuracy = 75, .armor = 2, .speed = 80, .faction = factions.SECURITY })) |id| {
-            scheduler.addActor(id, 80);
+        const floor = procgen.generate(&rng, 1);
+
+        // Place player at spawn point
+        var player_x: i32 = config.player_start_x;
+        var player_y: i32 = config.player_start_y;
+        for (floor.spawns[0..floor.spawn_count]) |sp| {
+            if (sp.kind == .player) {
+                player_x = sp.x;
+                player_y = sp.y;
+                break;
+            }
         }
 
-        const map = generation.generateStarterDungeon();
+        // Place enemies at enemy spawn points
+        const enemy_defs = [_]struct { glyph: u8, name: []const u8, hp: i32, armor: u32, accuracy: u32, speed: u32 }{
+            .{ .glyph = 'g', .name = "guard", .hp = 10, .armor = 0, .accuracy = 70, .speed = 100 },
+            .{ .glyph = 's', .name = "sentinel", .hp = 15, .armor = 2, .accuracy = 75, .speed = 80 },
+            .{ .glyph = 'r', .name = "rogue", .hp = 8, .armor = 0, .accuracy = 65, .speed = 110 },
+            .{ .glyph = 'e', .name = "enforcer", .hp = 20, .armor = 3, .accuracy = 80, .speed = 70 },
+        };
+        var def_idx: usize = 0;
+        for (floor.spawns[0..floor.spawn_count]) |sp| {
+            if (sp.kind != .enemy) continue;
+            if (def_idx >= enemy_defs.len) break;
+            const def = enemy_defs[def_idx];
+            def_idx += 1;
+            if (actors.addEnemy(.{
+                .position = .{ .x = sp.x, .y = sp.y },
+                .glyph = def.glyph,
+                .name = def.name,
+                .hp = def.hp,
+                .max_hp = def.hp,
+                .accuracy = def.accuracy,
+                .armor = def.armor,
+                .speed = def.speed,
+                .faction = factions.SECURITY,
+            })) |id| {
+                scheduler.addActor(id, def.speed);
+            }
+        }
+
         var vis = visibility_mod.VisibilityMap.init();
-        vis.compute(&map, config.player_start_x, config.player_start_y, FOV_RADIUS);
+        vis.compute(&floor.map, player_x, player_y, FOV_RADIUS);
 
         return RunState{
-            .map = map,
-            .player = .{},
+            .map = floor.map,
+            .player = .{ .position = .{ .x = player_x, .y = player_y } },
             .actors = actors,
             .items = item_store.ItemStore.init(),
             .turn_count = 0,
@@ -56,8 +91,10 @@ pub const RunState = struct {
             .current_floor = 1,
             .run_seed = seed,
             .scheduler = scheduler,
-            .rng = rng_mod.Rng.init(seed),
+            .rng = rng,
             .visibility = vis,
+            .rooms = floor.rooms,
+            .room_count = floor.room_count,
         };
     }
 

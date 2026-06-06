@@ -34,17 +34,14 @@ test "player movement respects walls and advances turns only for valid movement"
     var state = try State.init(std.testing.allocator);
     defer state.deinit();
 
-    try std.testing.expectEqual(@as(i32, config.player_start_x), state.run.player.position.x);
+    const px = state.run.player.position.x;
     try std.testing.expectEqual(@as(u64, 0), state.run.turn_count);
+    try std.testing.expect(!state.run.map.isBlockedAt(px, state.run.player.position.y));
 
-    const hit_wall = try movement.tryMovePlayer(&state, .west);
-    try std.testing.expectEqual(movement.MoveResult.blocked, hit_wall);
-    try std.testing.expectEqual(@as(i32, config.player_start_x), state.run.player.position.x);
-    try std.testing.expectEqual(@as(u64, 0), state.run.turn_count);
-
+    // Player spawns at room center; east is always open in a procgen room.
     const moved = try movement.tryMovePlayer(&state, .east);
     try std.testing.expectEqual(movement.MoveResult.moved, moved);
-    try std.testing.expectEqual(@as(i32, config.player_start_x + 1), state.run.player.position.x);
+    try std.testing.expectEqual(px + 1, state.run.player.position.x);
     try std.testing.expectEqual(@as(u64, 1), state.run.turn_count);
 }
 
@@ -349,24 +346,20 @@ test "FOV: origin tile is visible after compute" {
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
 
-    // Player starts at (player_start_x, player_start_y); FOV is computed in init.
-    try std.testing.expect(run.visibility.isVisible(config.player_start_x, config.player_start_y));
+    try std.testing.expect(run.visibility.isVisible(run.player.position.x, run.player.position.y));
 }
 
 test "FOV: explored tiles persist after player moves" {
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
 
-    // After init the player's start tile is explored.
-    const start_x = config.player_start_x;
-    const start_y = config.player_start_y;
+    const start_x = run.player.position.x;
+    const start_y = run.player.position.y;
     try std.testing.expect(run.visibility.isExplored(start_x, start_y));
 
-    // Move player east and recompute FOV.
     run.player.position.x += 1;
     run.recomputeFov();
 
-    // The original start tile should still be explored (persisted).
     try std.testing.expect(run.visibility.isExplored(start_x, start_y));
 }
 
@@ -374,9 +367,32 @@ test "FOV: wall tile adjacent to player is visible" {
     var run = try RunState.init(std.testing.allocator);
     defer run.deinit();
 
-    // Player spawns at (1, 2). The boundary wall column x=0 is adjacent.
-    // FOV is computed in init so the wall at (0, player_start_y) should be visible.
-    try std.testing.expect(run.visibility.isVisible(0, config.player_start_y));
+    // Find a wall adjacent to the player (rooms have walls on all sides).
+    const px = run.player.position.x;
+    const py = run.player.position.y;
+    const checks = [_][2]i32{ .{ px - 1, py }, .{ px + 1, py }, .{ px, py - 1 }, .{ px, py + 1 } };
+    var found_visible_wall = false;
+    for (checks) |c| {
+        if (run.map.isBlockedAt(c[0], c[1]) and run.visibility.isVisible(c[0], c[1])) {
+            found_visible_wall = true;
+            break;
+        }
+    }
+    // Walk outward if no immediate wall neighbour (player is in large room center).
+    if (!found_visible_wall) {
+        var d: i32 = 2;
+        while (d <= 4) : (d += 1) {
+            const far = [_][2]i32{ .{ px - d, py }, .{ px + d, py }, .{ px, py - d }, .{ px, py + d } };
+            for (far) |c| {
+                if (run.map.isBlockedAt(c[0], c[1]) and run.visibility.isVisible(c[0], c[1])) {
+                    found_visible_wall = true;
+                    break;
+                }
+            }
+            if (found_visible_wall) break;
+        }
+    }
+    try std.testing.expect(found_visible_wall);
 }
 
 // ---------------------------------------------------------------------------

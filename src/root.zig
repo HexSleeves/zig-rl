@@ -16,6 +16,7 @@ pub const world = struct {
     pub const tile = @import("world/tile.zig");
     pub const map = @import("world/map.zig");
     pub const generation = @import("world/generation.zig");
+    pub const procgen = @import("world/procgen.zig");
 };
 
 pub const entities = struct {
