@@ -43,6 +43,7 @@ pub const ui = struct {
     pub const hud = @import("ui/hud.zig");
     pub const layout = @import("ui/layout.zig");
     pub const log = @import("ui/log.zig");
+    pub const scene = @import("ui/scene.zig");
     pub const theme = @import("ui/theme.zig");
 
     pub const panels = struct {
