@@ -68,17 +68,18 @@ fn castLight(
     oy: i32,
     radius: u32,
     row: i32,
-    start_slope: f32,
+    start_slope_in: f32,
     end_slope: f32,
     xx: i32,
     xy: i32,
     yx: i32,
     yy: i32,
 ) void {
-    if (start_slope < end_slope) return;
+    if (start_slope_in < end_slope) return;
 
     const r2 = @as(i32, @intCast(radius * radius));
     var new_start: f32 = 0.0;
+    var start_slope = start_slope_in;
     var blocked = false;
     var j = row;
 

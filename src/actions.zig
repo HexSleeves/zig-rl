@@ -82,10 +82,12 @@ pub fn executeAction(action: Action, run: *RunState) !void {
     switch (action) {
         .move => |dir| {
             _ = try movement.tryMovePlayerRun(run, dir);
+            run.recomputeFov();
         },
         .wait => {
             try run.log.add("You wait.");
             try turn.endPlayerTurn(run);
+            run.recomputeFov();
         },
         .melee_bump => |dir| {
             const delta = movement.Direction.delta(dir);
@@ -121,6 +123,7 @@ pub fn executeAction(action: Action, run: *RunState) !void {
             }
 
             try turn.endPlayerTurn(run);
+            run.recomputeFov();
         },
         .quit => {}, // handled at State level
     }

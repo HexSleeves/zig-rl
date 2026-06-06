@@ -10,6 +10,7 @@ const item_store = @import("stores/item_store.zig");
 const energy_scheduler = @import("energy_scheduler.zig");
 const rng_mod = @import("rng.zig");
 const factions = @import("factions.zig");
+const visibility_mod = @import("visibility.zig");
 
 /// RunState holds all data for a single dungeon run.
 pub const RunState = struct {
@@ -23,6 +24,9 @@ pub const RunState = struct {
     run_seed: u64,
     scheduler: energy_scheduler.EnergyScheduler,
     rng: rng_mod.Rng,
+    visibility: visibility_mod.VisibilityMap,
+
+    pub const FOV_RADIUS: u32 = 8;
 
     pub fn init(allocator: std.mem.Allocator) !RunState {
         var actors = actor_store.ActorStore.init();
@@ -37,8 +41,12 @@ pub const RunState = struct {
             scheduler.addActor(id, 80);
         }
 
+        const map = generation.generateStarterDungeon();
+        var vis = visibility_mod.VisibilityMap.init();
+        vis.compute(&map, config.player_start_x, config.player_start_y, FOV_RADIUS);
+
         return RunState{
-            .map = generation.generateStarterDungeon(),
+            .map = map,
             .player = .{},
             .actors = actors,
             .items = item_store.ItemStore.init(),
@@ -48,11 +56,16 @@ pub const RunState = struct {
             .run_seed = seed,
             .scheduler = scheduler,
             .rng = rng_mod.Rng.init(seed),
+            .visibility = vis,
         };
     }
 
     pub fn deinit(self: *RunState) void {
         self.log.deinit();
+    }
+
+    pub fn recomputeFov(self: *RunState) void {
+        self.visibility.compute(&self.map, self.player.position.x, self.player.position.y, FOV_RADIUS);
     }
 
     /// Get the glyph of a living enemy at (x, y), or null if none.
