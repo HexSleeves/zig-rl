@@ -7,6 +7,7 @@ const enemy_mod = @import("entities/enemy.zig");
 const log_mod = @import("ui/log.zig");
 const actor_store = @import("stores/actor_store.zig");
 const item_store = @import("stores/item_store.zig");
+const energy_scheduler = @import("energy_scheduler.zig");
 
 /// RunState holds all data for a single dungeon run.
 pub const RunState = struct {
@@ -18,12 +19,19 @@ pub const RunState = struct {
     log: log_mod.MessageLog,
     current_floor: u32,
     run_seed: u64,
+    scheduler: energy_scheduler.EnergyScheduler,
 
     pub fn init(allocator: std.mem.Allocator) !RunState {
         var actors = actor_store.ActorStore.init();
+        var scheduler = energy_scheduler.EnergyScheduler.init();
+
         // Add 2 placeholder enemies matching previous state.zig positions
-        _ = actors.addEnemy(.{ .position = .{ .x = 28, .y = 10 } });
-        _ = actors.addEnemy(.{ .position = .{ .x = 32, .y = 14 }, .glyph = 's', .name = "sentinel" });
+        if (actors.addEnemy(.{ .position = .{ .x = 28, .y = 10 } })) |id| {
+            scheduler.addActor(id, energy_scheduler.BASE_SPEED);
+        }
+        if (actors.addEnemy(.{ .position = .{ .x = 32, .y = 14 }, .glyph = 's', .name = "sentinel" })) |id| {
+            scheduler.addActor(id, energy_scheduler.BASE_SPEED);
+        }
 
         return RunState{
             .map = generation.generateStarterDungeon(),
@@ -34,6 +42,7 @@ pub const RunState = struct {
             .log = log_mod.MessageLog.init(allocator),
             .current_floor = 1,
             .run_seed = 0,
+            .scheduler = scheduler,
         };
     }
 

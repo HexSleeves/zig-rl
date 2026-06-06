@@ -1,5 +1,6 @@
 pub const actions = @import("actions.zig");
 pub const config = @import("config.zig");
+pub const energy_scheduler = @import("energy_scheduler.zig");
 pub const rng = @import("rng.zig");
 pub const ids = @import("ids.zig");
 pub const input = @import("input.zig");
