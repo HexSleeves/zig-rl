@@ -41,3 +41,9 @@ pub const stores = struct {
 };
 
 pub const status = @import("status.zig");
+
+pub const ai = struct {
+    pub const behavior = @import("ai/behavior.zig");
+    pub const pathfind = @import("ai/pathfind.zig");
+    pub const ai_system = @import("ai/ai_system.zig");
+};
