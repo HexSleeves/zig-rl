@@ -25,6 +25,7 @@ pub const RunState = struct {
     scheduler: energy_scheduler.EnergyScheduler,
     rng: rng_mod.Rng,
     visibility: visibility_mod.VisibilityMap,
+    alert_level: u8 = 0,
 
     pub const FOV_RADIUS: u32 = 8;
 
@@ -66,6 +67,10 @@ pub const RunState = struct {
 
     pub fn recomputeFov(self: *RunState) void {
         self.visibility.compute(&self.map, self.player.position.x, self.player.position.y, FOV_RADIUS);
+    }
+
+    pub fn raiseAlert(self: *RunState, amount: u8) void {
+        self.alert_level = @min(100, self.alert_level + amount);
     }
 
     /// Get the glyph of a living enemy at (x, y), or null if none.

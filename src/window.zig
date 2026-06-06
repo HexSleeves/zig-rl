@@ -155,6 +155,14 @@ fn drawHud(game: *const Game, l: render.Layout) void {
     zgui.end();
 }
 
+fn dimColor(c: u32) u32 {
+    const r = (c >> 0) & 0xff;
+    const g = (c >> 8) & 0xff;
+    const b = (c >> 16) & 0xff;
+    const a = (c >> 24) & 0xff;
+    return (a << 24) | ((b / 2) << 16) | ((g / 2) << 8) | (r / 2);
+}
+
 fn drawMap(game: *const Game, l: render.Layout) void {
     const draw_list = zgui.getBackgroundDrawList();
     draw_list.addRectFilled(.{
@@ -169,18 +177,23 @@ fn drawMap(game: *const Game, l: render.Layout) void {
         while (x < game.state.run.map.width) : (x += 1) {
             const px = l.map_origin_x + @as(i32, @intCast(x)) * l.tile_size;
             const py = l.map_origin_y + @as(i32, @intCast(y)) * l.tile_size;
-            const color = switch (game.state.run.map.get(x, y).kind) {
+            const is_visible = game.state.run.visibility.isVisible(@intCast(x), @intCast(y));
+            const is_explored = game.state.run.visibility.isExplored(@intCast(x), @intCast(y));
+            const color = if (is_visible) switch (game.state.run.map.get(x, y).kind) {
                 .wall => palette.wall,
                 .floor => palette.floor,
-            };
+            } else if (is_explored) switch (game.state.run.map.get(x, y).kind) {
+                .wall => dimColor(palette.wall),
+                .floor => dimColor(palette.floor),
+            } else palette.background;
             drawTile(draw_list, px, py, l.tile_size, color);
         }
     }
 
     for (game.state.run.actors.enemiesSlice()) |enemy| {
-        if (enemy.alive) {
-            drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, &[_]u8{enemy.glyph});
-        }
+        if (!enemy.alive) continue;
+        if (!game.state.run.visibility.isVisible(enemy.position.x, enemy.position.y)) continue;
+        drawActor(draw_list, enemy.position.x, enemy.position.y, l, palette.enemy, &[_]u8{enemy.glyph});
     }
 
     drawActor(draw_list, game.state.run.player.position.x, game.state.run.player.position.y, l, palette.player, "@");
@@ -240,6 +253,7 @@ fn drawDebug(game: *const Game, fps: f32) void {
         zgui.text("Turn:   {d}", .{run_state.turn_count});
         zgui.text("Mode:   {s}", .{@tagName(game.state.current_mode)});
         zgui.text("FPS:    {d:.1}", .{fps});
+        zgui.text("Alert:  {d}", .{run_state.alert_level});
     }
     zgui.end();
 }
