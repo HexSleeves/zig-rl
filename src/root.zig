@@ -1,4 +1,6 @@
+pub const actions = @import("actions.zig");
 pub const config = @import("config.zig");
+pub const energy_scheduler = @import("energy_scheduler.zig");
 pub const rng = @import("rng.zig");
 pub const ids = @import("ids.zig");
 pub const input = @import("input.zig");
@@ -7,6 +9,7 @@ pub const game_mode = @import("game_mode.zig");
 pub const State = @import("state.zig").State;
 pub const RunState = @import("run_state.zig").RunState;
 pub const CampaignState = @import("campaign_state.zig").CampaignState;
+pub const Game = @import("game.zig").Game;
 
 pub const world = struct {
     pub const tile = @import("world/tile.zig");
