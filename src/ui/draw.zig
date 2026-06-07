@@ -71,8 +71,11 @@ pub fn glyph(dl: DrawList, x: i32, y: i32, col: u32, ch: []const u8, size: f32) 
 }
 
 pub fn glyphGlow(dl: DrawList, x: i32, y: i32, col: u32, ch: []const u8, size: f32, radius: i32) void {
-    const halo = theme.withAlpha(col, 0x40);
-    const offs = [_][2]i32{ .{ radius, 0 }, .{ -radius, 0 }, .{ 0, radius }, .{ 0, -radius } };
+    const halo = theme.withAlpha(col, 0x22);
+    const offs = [_][2]i32{
+        .{ radius, 0 },      .{ -radius, 0 },     .{ 0, radius },      .{ 0, -radius },
+        .{ radius, radius }, .{ -radius, radius }, .{ radius, -radius }, .{ -radius, -radius },
+    };
     for (offs) |o| glyph(dl, x + o[0], y + o[1], halo, ch, size);
     glyph(dl, x, y, col, ch, size);
 }

@@ -35,7 +35,7 @@ pub fn draw_view(dl: draw.DrawList, run: *const RunState, l: layout.Layout, cam:
                 .floor => theme.palette.dim,
                 .door => theme.palette.accent,
             };
-            if (!visible) col = theme.dim(col, 0.35);
+            if (!visible) col = theme.darken(col, 0.35);
             draw.fillRect(dl, .{ .x = px, .y = py, .w = vp.tile_size, .h = vp.tile_size }, col);
 
             if (visible) {

@@ -62,6 +62,10 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 
     zgui.init(std.heap.c_allocator);
     defer zgui.deinit();
+    // Bundled monospace font. First font added becomes the default, so
+    // pushFont(null,...) and draw-list text both use it. Must load before the
+    // backend builds the font atlas. Path is relative to the run cwd (repo root).
+    _ = zgui.io.addFontFromFile("assets/fonts/JetBrainsMono-Regular.ttf", 32.0);
     zgui.backend.init(window);
     defer zgui.backend.deinit();
 

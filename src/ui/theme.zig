@@ -53,8 +53,8 @@ pub fn alertTint(level: u8) u32 {
     return lerp(ramp_alert, ramp_lockdown, std.math.clamp((l - 80.0) / 20.0, 0.0, 1.0));
 }
 
-/// Dim a color toward black by factor (0=black, 1=unchanged), keeping alpha.
-pub fn dim(c: u32, factor: f32) u32 {
+/// Darken a color toward black by factor (0=black, 1=unchanged), keeping alpha.
+pub fn darken(c: u32, factor: f32) u32 {
     const f = std.math.clamp(factor, 0.0, 1.0);
     var out: u32 = c & 0xFF000000;
     inline for (.{ 0, 8, 16 }) |shift| {
@@ -95,6 +95,6 @@ test "lerp endpoints and midpoint" {
     try std.testing.expectEqual(@as(u32, 0xFF808080), lerp(0xFF000000, 0xFFFFFFFF, 0.5));
 }
 
-test "dim halves channels, keeps alpha" {
-    try std.testing.expectEqual(@as(u32, 0xFF804020), dim(0xFFFF8040, 0.5));
+test "darken halves channels, keeps alpha" {
+    try std.testing.expectEqual(@as(u32, 0xFF804020), darken(0xFFFF8040, 0.5));
 }
