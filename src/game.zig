@@ -1,3 +1,5 @@
+const std = @import("std");
+const Io = std.Io;
 const State = @import("state.zig").State;
 const input = @import("input.zig");
 const actions = @import("actions.zig");
@@ -5,12 +7,19 @@ const ids = @import("ids.zig");
 const turn = @import("systems/turn.zig");
 const energy_scheduler = @import("energy_scheduler.zig");
 const campaign_state = @import("campaign_state.zig");
+const save = @import("save/save.zig");
 
 pub const Game = struct {
     state: State,
+    io: Io,
 
-    pub fn init(allocator: anytype) !Game {
-        var game = Game{ .state = try State.init(allocator) };
+    pub fn init(allocator: anytype, io: Io) !Game {
+        const campaign = save.loadCampaign(io) catch campaign_state.CampaignState.init();
+        var game = Game{
+            .state = try State.init(allocator),
+            .io = io,
+        };
+        game.state.campaign = campaign;
         try game.state.run.log.add("Explore the starter dungeon.");
         return game;
     }
@@ -20,29 +29,21 @@ pub const Game = struct {
     }
 
     pub fn handle(self: *Game, command: input.Command) !void {
-        // Convert command to intent; null means no-op
         const intent = actions.intentFromCommand(command) orelse return;
 
-        // Quit is handled at the State level before validation/execution
         if (intent == .quit) {
             self.state.quit_requested = true;
+            save.saveCampaign(self.io, &self.state.campaign) catch {};
             self.state.endRun(.quit);
             return;
         }
 
-        // Validate intent against current game state (e.g. wall check)
         const action = actions.validateIntent(intent, &self.state.run) orelse return;
-
-        // Execute the validated action
         try actions.executeAction(action, &self.state.run);
-
-        // Deduct energy from the player after acting
         self.state.run.scheduler.deductCost(ids.player_actor_id, actions.costOf(action));
 
-        // Tick all actors, then run every non-player actor that has enough energy.
-        // Must tick BEFORE checking enemies so slower actors accumulate correctly.
         self.state.run.scheduler.tick();
-        var i: usize = 1; // slot 0 is always player
+        var i: usize = 1;
         while (i < self.state.run.scheduler.count) : (i += 1) {
             const slot = &self.state.run.scheduler.actors[i];
             if (slot.energy >= energy_scheduler.ACTION_THRESHOLD) {
@@ -51,18 +52,16 @@ pub const Game = struct {
             }
         }
 
-        // Detect player death after enemy turns
         if (self.state.run.player.hp <= 0) {
+            save.saveCampaign(self.io, &self.state.campaign) catch {};
             self.state.endRun(.operative_death);
             self.state.current_mode = .game_over;
             return;
         }
 
-        // Tick cameras and alert decay
         self.state.run.tickCameras();
         self.state.run.tickAlertDecay();
 
-        // Lockdown: alert >= 80 locks all closed doors
         if (self.state.run.alert_level >= 80) {
             var j: usize = 0;
             while (j < self.state.run.objects.count) : (j += 1) {
@@ -73,5 +72,8 @@ pub const Game = struct {
                 }
             }
         }
+
+        // Autosave run state every turn
+        save.saveRun(self.io, &self.state.run) catch {};
     }
 };

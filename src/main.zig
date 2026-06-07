@@ -15,5 +15,5 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    try app.run(debug_allocator.allocator(), options);
+    try app.run(debug_allocator.allocator(), init.io, options);
 }

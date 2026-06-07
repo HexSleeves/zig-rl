@@ -212,7 +212,7 @@ test "scheduler: player acts, enemies wait, player gets turn back" {
 }
 
 test "move action increments turn_count via game.handle" {
-    var game = try Game.init(std.testing.allocator);
+    var game = try Game.init(std.testing.allocator, std.testing.io);
     defer game.deinit();
 
     try std.testing.expectEqual(@as(u64, 0), game.state.run.turn_count);

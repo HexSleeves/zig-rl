@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 const campaign_mod = @import("../campaign_state.zig");
 const run_state_mod = @import("../run_state.zig");
 const tile_mod = @import("../world/tile.zig");
@@ -51,26 +52,60 @@ pub const CommandByte = enum(u8) {
 };
 
 // ---------------------------------------------------------------------------
+// In-memory buffer writer / reader (replaces std.io.fixedBufferStream)
+// ---------------------------------------------------------------------------
+
+const BufWriter = struct {
+    buf: []u8,
+    pos: usize = 0,
+
+    fn writeAll(self: *BufWriter, data: []const u8) error{NoSpaceLeft}!void {
+        if (self.pos + data.len > self.buf.len) return error.NoSpaceLeft;
+        @memcpy(self.buf[self.pos..][0..data.len], data);
+        self.pos += data.len;
+    }
+
+    fn writeInt(self: *BufWriter, comptime T: type, value: T, endian: std.builtin.Endian) error{NoSpaceLeft}!void {
+        var tmp: [@sizeOf(T)]u8 = undefined;
+        std.mem.writeInt(T, &tmp, value, endian);
+        try self.writeAll(&tmp);
+    }
+
+    fn getWritten(self: *const BufWriter) []const u8 {
+        return self.buf[0..self.pos];
+    }
+};
+
+const BufReader = struct {
+    buf: []const u8,
+    pos: usize = 0,
+
+    fn readNoEof(self: *BufReader, dest: []u8) error{EndOfStream}!void {
+        if (self.pos + dest.len > self.buf.len) return error.EndOfStream;
+        @memcpy(dest, self.buf[self.pos..][0..dest.len]);
+        self.pos += dest.len;
+    }
+
+    fn readInt(self: *BufReader, comptime T: type, endian: std.builtin.Endian) error{EndOfStream}!T {
+        var tmp: [@sizeOf(T)]u8 = undefined;
+        try self.readNoEof(&tmp);
+        return std.mem.readInt(T, &tmp, endian);
+    }
+};
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn ensureSaveDir() !void {
-    std.fs.cwd().makeDir("saves") catch |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => return err,
-    };
+fn ensureSaveDir(io: Io) void {
+    Io.Dir.cwd().createDir(io, "saves", .default_dir) catch {};
 }
 
-fn writeAtomic(path: []const u8, data: []const u8) !void {
-    var tmp_buf: [512]u8 = undefined;
-    const tmp_path = try std.fmt.bufPrint(&tmp_buf, "{s}.tmp", .{path});
-    {
-        const f = try std.fs.cwd().createFile(tmp_path, .{});
-        defer f.close();
-        try f.writeAll(data);
-        try f.sync();
-    }
-    try std.fs.cwd().rename(tmp_path, path);
+fn writeAtomic(io: Io, path: []const u8, data: []const u8) !void {
+    var af = try Io.Dir.cwd().createFileAtomic(io, path, .{ .replace = true });
+    defer af.deinit(io);
+    try af.file.writePositionalAll(io, data, 0);
+    try af.replace(io);
 }
 
 fn bitset32ToU32(bs: *const std.bit_set.StaticBitSet(32)) u32 {
@@ -142,11 +177,10 @@ fn u8ToBitsetN(v: u8, comptime N: usize) std.bit_set.StaticBitSet(N) {
 // Campaign save / load
 // ---------------------------------------------------------------------------
 
-pub fn saveCampaign(campaign: *const campaign_mod.CampaignState) !void {
-    try ensureSaveDir();
+pub fn saveCampaign(io: Io, campaign: *const campaign_mod.CampaignState) !void {
+    ensureSaveDir(io);
     var buf: [8192]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    const w = fbs.writer();
+    var w = BufWriter{ .buf = &buf };
 
     try w.writeAll(&CAMPAIGN_MAGIC);
     try w.writeInt(u32, SAVE_VERSION, .little);
@@ -186,18 +220,17 @@ pub fn saveCampaign(campaign: *const campaign_mod.CampaignState) !void {
     }
     for (campaign.wing_status) |ws| try w.writeInt(u8, @intFromEnum(ws), .little);
 
-    try writeAtomic(CAMPAIGN_PATH, fbs.getWritten());
+    try writeAtomic(io, CAMPAIGN_PATH, w.getWritten());
 }
 
-pub fn loadCampaign() !campaign_mod.CampaignState {
-    const file = std.fs.cwd().openFile(CAMPAIGN_PATH, .{}) catch return campaign_mod.CampaignState.init();
-    defer file.close();
-
+pub fn loadCampaign(io: Io) !campaign_mod.CampaignState {
     var buf: [8192]u8 = undefined;
-    const n = try file.readAll(&buf);
-    var fbs = std.io.fixedBufferStream(buf[0..n]);
-    const r = fbs.reader();
+    const file = Io.Dir.cwd().openFile(io, CAMPAIGN_PATH, .{}) catch
+        return campaign_mod.CampaignState.init();
+    defer file.close(io);
+    const n = try file.readPositionalAll(io, &buf, 0);
 
+    var r = BufReader{ .buf = buf[0..n] };
     var magic: [4]u8 = undefined;
     try r.readNoEof(&magic);
     if (!std.mem.eql(u8, &magic, &CAMPAIGN_MAGIC)) return SaveError.InvalidMagic;
@@ -243,11 +276,10 @@ pub fn loadCampaign() !campaign_mod.CampaignState {
 // Run save / load
 // ---------------------------------------------------------------------------
 
-pub fn saveRun(run: *const run_state_mod.RunState) !void {
-    try ensureSaveDir();
+pub fn saveRun(io: Io, run: *const run_state_mod.RunState) !void {
+    ensureSaveDir(io);
     var buf: [32768]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    const w = fbs.writer();
+    var w = BufWriter{ .buf = &buf };
 
     try w.writeAll(&RUN_MAGIC);
     try w.writeInt(u32, SAVE_VERSION, .little);
@@ -346,21 +378,19 @@ pub fn saveRun(run: *const run_state_mod.RunState) !void {
         }
     }
 
-    try writeAtomic(RUN_PATH, fbs.getWritten());
+    try writeAtomic(io, RUN_PATH, w.getWritten());
 }
 
-pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
+pub fn loadRun(io: Io, allocator: std.mem.Allocator) !run_state_mod.RunState {
     var run = try run_state_mod.RunState.init(allocator);
     errdefer run.deinit();
 
-    const file = std.fs.cwd().openFile(RUN_PATH, .{}) catch return run;
-    defer file.close();
-
     var buf: [32768]u8 = undefined;
-    const n = try file.readAll(&buf);
-    var fbs = std.io.fixedBufferStream(buf[0..n]);
-    const r = fbs.reader();
+    const file = Io.Dir.cwd().openFile(io, RUN_PATH, .{}) catch return run;
+    defer file.close(io);
+    const n = try file.readPositionalAll(io, &buf, 0);
 
+    var r = BufReader{ .buf = buf[0..n] };
     var magic: [4]u8 = undefined;
     try r.readNoEof(&magic);
     if (!std.mem.eql(u8, &magic, &RUN_MAGIC)) return SaveError.InvalidMagic;
@@ -394,7 +424,6 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
         slot.* = if (v != 0) ids_mod.ItemId{ .value = v } else null;
     }
 
-    // Enemies — restore actors (scheduler restored separately below)
     const actor_count = try r.readInt(u32, .little);
     run.actors = actor_store_mod.ActorStore.init();
     for (0..actor_count) |_| {
@@ -425,7 +454,6 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
         _ = run.actors.addEnemy(e);
     }
 
-    // Items
     const item_count = try r.readInt(u32, .little);
     run.items = item_store_mod.ItemStore.init();
     var max_item_id: u32 = 0;
@@ -447,7 +475,6 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
     run.items.count = item_count;
     run.items.next_id = max_item_id + 1;
 
-    // Objects
     const object_count = try r.readInt(u32, .little);
     run.objects = object_store_mod.ObjectStore.init();
     var max_obj_id: u32 = 0;
@@ -469,7 +496,6 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
     run.objects.count = object_count;
     run.objects.next_id = max_obj_id + 1;
 
-    // Scheduler — restore fully from saved state
     const sched_count = try r.readInt(u32, .little);
     run.scheduler = energy_sched_mod.EnergyScheduler.init();
     for (0..sched_count) |i| {
@@ -481,7 +507,6 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
     }
     run.scheduler.count = sched_count;
 
-    // Map tiles
     const tile_count = try r.readInt(u32, .little);
     _ = tile_count;
     for (0..config.map_height) |y| {
@@ -498,16 +523,15 @@ pub fn loadRun(allocator: std.mem.Allocator) !run_state_mod.RunState {
 // Replay log header
 // ---------------------------------------------------------------------------
 
-pub fn saveReplayHeader(initial_seed: u64) !void {
-    try ensureSaveDir();
+pub fn saveReplayHeader(io: Io, initial_seed: u64) !void {
+    ensureSaveDir(io);
     var buf: [20]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    const w = fbs.writer();
+    var w = BufWriter{ .buf = &buf };
     try w.writeAll(&REPLAY_MAGIC);
     try w.writeInt(u32, SAVE_VERSION, .little);
     try w.writeInt(u64, initial_seed, .little);
-    try w.writeInt(u32, 0, .little); // command_count placeholder
-    try writeAtomic(REPLAY_PATH, fbs.getWritten());
+    try w.writeInt(u32, 0, .little);
+    try writeAtomic(io, REPLAY_PATH, w.getWritten());
 }
 
 // ---------------------------------------------------------------------------
@@ -557,8 +581,7 @@ test "campaign encode/decode round-trip (in-memory)" {
     campaign.setWingStatus(.beta_sector, .available);
 
     var enc: [8192]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&enc);
-    const w = fbs.writer();
+    var w = BufWriter{ .buf = &enc };
     try w.writeAll(&CAMPAIGN_MAGIC);
     try w.writeInt(u32, SAVE_VERSION, .little);
     try w.writeInt(u32, bitset32ToU32(&campaign.unlocked_items), .little);
@@ -589,9 +612,7 @@ test "campaign encode/decode round-trip (in-memory)" {
     }
     for (campaign.wing_status) |ws| try w.writeInt(u8, @intFromEnum(ws), .little);
 
-    // Decode
-    var fbs2 = std.io.fixedBufferStream(fbs.getWritten());
-    const r = fbs2.reader();
+    var r = BufReader{ .buf = w.getWritten() };
     var magic: [4]u8 = undefined;
     try r.readNoEof(&magic);
     try std.testing.expect(std.mem.eql(u8, &magic, &CAMPAIGN_MAGIC));
@@ -603,13 +624,11 @@ test "campaign encode/decode round-trip (in-memory)" {
 
 test "version mismatch detected" {
     var buf: [16]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    const w = fbs.writer();
+    var w = BufWriter{ .buf = &buf };
     try w.writeAll(&CAMPAIGN_MAGIC);
     try w.writeInt(u32, SAVE_VERSION + 1, .little);
 
-    var fbs2 = std.io.fixedBufferStream(fbs.getWritten());
-    const r = fbs2.reader();
+    var r = BufReader{ .buf = w.getWritten() };
     var magic: [4]u8 = undefined;
     try r.readNoEof(&magic);
     const ver = try r.readInt(u32, .little);
