@@ -128,26 +128,26 @@ fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: 
                 game.state.current_mode = .running;
                 return;
             }
-            const run = &game.state.run;
-            const count = inventoryItemCount(run);
+            const rs = &game.state.run;
+            const count = inventoryItemCount(rs);
             if (count > 0) {
                 if (pressedOne(window, &in.inv_j, .j)) inv_sel.* = (inv_sel.* + 1) % count;
                 if (pressedOne(window, &in.inv_k, .k)) inv_sel.* = if (inv_sel.* == 0) count - 1 else inv_sel.* - 1;
                 if (pressedOne(window, &in.inv_equip, .e)) {
-                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
-                        try toggleEquip(run, item_id);
+                    if (getSelectedItemId(rs, inv_sel.*)) |item_id| {
+                        try toggleEquip(rs, item_id);
                     }
                 }
                 if (pressedOne(window, &in.inv_use, .u)) {
-                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
-                        try actions.executeAction(.{ .use_item = item_id }, run);
-                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(run)) inv_sel.* -= 1;
+                    if (getSelectedItemId(rs, inv_sel.*)) |item_id| {
+                        try actions.executeAction(.{ .use_item = item_id }, rs);
+                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(rs)) inv_sel.* -= 1;
                     }
                 }
                 if (pressedOne(window, &in.inv_drop, .d)) {
-                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
-                        dropItem(run, item_id);
-                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(run)) inv_sel.* -= 1;
+                    if (getSelectedItemId(rs, inv_sel.*)) |item_id| {
+                        dropItem(rs, item_id);
+                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(rs)) inv_sel.* -= 1;
                     }
                 }
             }
@@ -160,15 +160,15 @@ fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: 
     }
 }
 
-fn inventoryItemCount(run: *const @import("run_state.zig").RunState) usize {
+fn inventoryItemCount(rs: *const @import("run_state.zig").RunState) usize {
     var count: usize = 0;
-    for (run.player.inventory.items) |slot| if (slot != null) { count += 1; };
+    for (rs.player.inventory.items) |slot| if (slot != null) { count += 1; };
     return count;
 }
 
-fn getSelectedItemId(run: *const @import("run_state.zig").RunState, sel: usize) ?ids.ItemId {
+fn getSelectedItemId(rs: *const @import("run_state.zig").RunState, sel: usize) ?ids.ItemId {
     var row: usize = 0;
-    for (run.player.inventory.items) |slot| {
+    for (rs.player.inventory.items) |slot| {
         const item_id = slot orelse continue;
         if (row == sel) return item_id;
         row += 1;
@@ -186,32 +186,31 @@ fn equipSlotForKind(kind: item_def_mod.ItemKind) ?inventory_mod.EquipSlot {
     };
 }
 
-fn toggleEquip(run: *@import("run_state.zig").RunState, item_id: ids.ItemId) !void {
-    const inst = run.items.getItem(item_id) orelse return;
+fn toggleEquip(rs: *@import("run_state.zig").RunState, item_id: ids.ItemId) !void {
+    const inst = rs.items.getItem(item_id) orelse return;
     const def = item_def_mod.getById(inst.def_id) orelse return;
     const slot = equipSlotForKind(def.kind) orelse {
-        try run.log.add("That item can't be equipped.");
+        try rs.log.add("That item can't be equipped.");
         return;
     };
-    if (run.player.inventory.equipment.isEquipped(item_id)) {
-        _ = run.player.inventory.equipment.remove(slot);
-        try run.log.add("Unequipped.");
+    if (rs.player.inventory.equipment.isEquipped(item_id)) {
+        _ = rs.player.inventory.equipment.remove(slot);
+        try rs.log.add("Unequipped.");
     } else {
-        _ = run.player.inventory.equip(item_id, slot);
-        try run.log.add("Equipped.");
+        _ = rs.player.inventory.equip(item_id, slot);
+        try rs.log.add("Equipped.");
     }
 }
 
-fn dropItem(run: *@import("run_state.zig").RunState, item_id: ids.ItemId) void {
-    // Unequip from all slots if equipped
-    for (&run.player.inventory.equipment.slots) |*slot| {
+fn dropItem(rs: *@import("run_state.zig").RunState, item_id: ids.ItemId) void {
+    for (&rs.player.inventory.equipment.slots) |*slot| {
         if (slot.*) |eid| if (eid.eql(item_id)) { slot.* = null; };
     }
-    _ = run.player.inventory.remove(item_id);
-    if (run.items.getItemMut(item_id)) |inst| {
+    _ = rs.player.inventory.remove(item_id);
+    if (rs.items.getItemMut(item_id)) |inst| {
         inst.owner = ids.ActorId.invalid;
-        inst.x = run.player.position.x;
-        inst.y = run.player.position.y;
+        inst.x = rs.player.position.x;
+        inst.y = rs.player.position.y;
     }
 }
 
