@@ -31,5 +31,5 @@ pub fn draw_inventory(run: *const RunState, l: layout.Layout, sel: usize) void {
         y += step;
         row += 1;
     }
-    draw.textAt(dl, r.x + draw.so(16, s), r.bottom() - draw.so(28, s), theme.palette.dim, "[J/K] select  [I/Esc] close");
+    draw.textAt(dl, r.x + draw.so(16, s), r.bottom() - draw.so(28, s), theme.palette.dim, "[J/K] nav  [E] equip  [U] use  [D] drop  [Esc] close");
 }

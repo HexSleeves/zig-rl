@@ -8,6 +8,7 @@ const map_view = @import("panels/map_view.zig");
 const header = @import("panels/header.zig");
 const vitals = @import("panels/vitals.zig");
 const loadout = @import("panels/loadout.zig");
+const minimap = @import("panels/minimap.zig");
 const inspect = @import("panels/inspect.zig");
 const log_panel = @import("panels/log_panel.zig");
 
@@ -30,8 +31,11 @@ pub fn draw_scene(run: *const RunState, l: layout.Layout, cam: camera.Camera, ta
 
     const vitals_h = draw.so(84, l.scale);
     const split_gap = draw.so(8, l.scale);
+    const minimap_h = draw.so(82, l.scale);
+    const loadout_h = l.sidebar.h - vitals_h - split_gap - minimap_h - split_gap;
     vitals.draw_vitals(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y, .w = l.sidebar.w, .h = vitals_h }, l.scale);
-    loadout.draw_loadout(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y + vitals_h + split_gap, .w = l.sidebar.w, .h = l.sidebar.h - vitals_h - split_gap }, l.scale);
+    loadout.draw_loadout(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.y + vitals_h + split_gap, .w = l.sidebar.w, .h = loadout_h }, l.scale);
+    minimap.draw_minimap(dl, run, .{ .x = l.sidebar.x, .y = l.sidebar.bottom() - minimap_h, .w = l.sidebar.w, .h = minimap_h }, l.scale);
 
     header.draw_header(dl, run, l);
     inspect.draw_inspect(dl, run, l.inspect, target, l.scale);

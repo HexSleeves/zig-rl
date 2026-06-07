@@ -6,6 +6,10 @@ const zopengl = @import("zopengl");
 const Game = @import("game.zig").Game;
 const config = @import("config.zig");
 const input = @import("input.zig");
+const actions = @import("actions.zig");
+const item_def_mod = @import("items/item_def.zig");
+const inventory_mod = @import("items/inventory.zig");
+const ids = @import("ids.zig");
 const layout = @import("ui/layout.zig");
 const camera = @import("ui/camera.zig");
 const theme = @import("ui/theme.zig");
@@ -31,6 +35,11 @@ const InputState = struct {
     enter: bool = false,
     inv: bool = false,
     esc: bool = false,
+    inv_j: bool = false,
+    inv_k: bool = false,
+    inv_equip: bool = false,
+    inv_use: bool = false,
+    inv_drop: bool = false,
 };
 
 pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
@@ -100,7 +109,6 @@ pub fn run(game: *Game, smoke_frame_limit: ?u32) !void {
 }
 
 fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: *bool, inv_sel: *usize) !void {
-    _ = inv_sel;
     if (pressedOne(window, &in.f1, .F1)) show_debug.* = !show_debug.*;
     switch (game.state.current_mode) {
         .main_menu => {
@@ -110,18 +118,100 @@ fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: 
         .running => {
             if (pressedOne(window, &in.inv, .i)) {
                 game.state.current_mode = .inventory;
+                inv_sel.* = 0;
                 return;
             }
             if (readCommand(window, in)) |cmd| try game.handle(cmd);
         },
         .inventory => {
-            if (pressedOne(window, &in.inv, .i) or pressedOne(window, &in.esc, .escape)) game.state.current_mode = .running;
+            if (pressedOne(window, &in.inv, .i) or pressedOne(window, &in.esc, .escape)) {
+                game.state.current_mode = .running;
+                return;
+            }
+            const run = &game.state.run;
+            const count = inventoryItemCount(run);
+            if (count > 0) {
+                if (pressedOne(window, &in.inv_j, .j)) inv_sel.* = (inv_sel.* + 1) % count;
+                if (pressedOne(window, &in.inv_k, .k)) inv_sel.* = if (inv_sel.* == 0) count - 1 else inv_sel.* - 1;
+                if (pressedOne(window, &in.inv_equip, .e)) {
+                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
+                        try toggleEquip(run, item_id);
+                    }
+                }
+                if (pressedOne(window, &in.inv_use, .u)) {
+                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
+                        try actions.executeAction(.{ .use_item = item_id }, run);
+                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(run)) inv_sel.* -= 1;
+                    }
+                }
+                if (pressedOne(window, &in.inv_drop, .d)) {
+                    if (getSelectedItemId(run, inv_sel.*)) |item_id| {
+                        dropItem(run, item_id);
+                        if (inv_sel.* > 0 and inv_sel.* >= inventoryItemCount(run)) inv_sel.* -= 1;
+                    }
+                }
+            }
         },
         .game_over, .campaign_summary => {
             if (pressedOne(window, &in.enter, .enter)) game.state.current_mode = .main_menu;
             if (pressedAny(window, &in.quit, &.{ .q, .escape })) game.state.quit_requested = true;
         },
         else => {},
+    }
+}
+
+fn inventoryItemCount(run: *const @import("run_state.zig").RunState) usize {
+    var count: usize = 0;
+    for (run.player.inventory.items) |slot| if (slot != null) { count += 1; };
+    return count;
+}
+
+fn getSelectedItemId(run: *const @import("run_state.zig").RunState, sel: usize) ?ids.ItemId {
+    var row: usize = 0;
+    for (run.player.inventory.items) |slot| {
+        const item_id = slot orelse continue;
+        if (row == sel) return item_id;
+        row += 1;
+    }
+    return null;
+}
+
+fn equipSlotForKind(kind: item_def_mod.ItemKind) ?inventory_mod.EquipSlot {
+    return switch (kind) {
+        .weapon => .primary_weapon,
+        .armor => .armor_rig,
+        .implant => .implant_1,
+        .tool => .utility_1,
+        else => null,
+    };
+}
+
+fn toggleEquip(run: *@import("run_state.zig").RunState, item_id: ids.ItemId) !void {
+    const inst = run.items.getItem(item_id) orelse return;
+    const def = item_def_mod.getById(inst.def_id) orelse return;
+    const slot = equipSlotForKind(def.kind) orelse {
+        try run.log.add("That item can't be equipped.");
+        return;
+    };
+    if (run.player.inventory.equipment.isEquipped(item_id)) {
+        _ = run.player.inventory.equipment.remove(slot);
+        try run.log.add("Unequipped.");
+    } else {
+        _ = run.player.inventory.equip(item_id, slot);
+        try run.log.add("Equipped.");
+    }
+}
+
+fn dropItem(run: *@import("run_state.zig").RunState, item_id: ids.ItemId) void {
+    // Unequip from all slots if equipped
+    for (&run.player.inventory.equipment.slots) |*slot| {
+        if (slot.*) |eid| if (eid.eql(item_id)) { slot.* = null; };
+    }
+    _ = run.player.inventory.remove(item_id);
+    if (run.items.getItemMut(item_id)) |inst| {
+        inst.owner = ids.ActorId.invalid;
+        inst.x = run.player.position.x;
+        inst.y = run.player.position.y;
     }
 }
 
