@@ -129,6 +129,7 @@ fn handleInput(game: *Game, window: *zglfw.Window, in: *InputState, show_debug: 
         },
         .inventory => {
             if (pressedOne(window, &in.inv, .i) or pressedOne(window, &in.esc, .escape)) {
+                in.quit = true; // prevent escape triggering quit on next frame
                 game.state.current_mode = .running;
                 return;
             }
