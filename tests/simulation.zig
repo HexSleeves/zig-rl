@@ -18,6 +18,7 @@ const factions = rl.factions;
 const enemy_mod = rl.entities.enemy;
 const tile_mod = rl.world.tile;
 const map_mod = rl.world.map;
+const visibility = rl.visibility;
 
 test "starter dungeon has fixed dimensions, boundary walls, and walkable player spawn" {
     var map = generation.generateStarterDungeon();
@@ -474,6 +475,56 @@ test "FOV: wall tile adjacent to player is visible" {
     try std.testing.expect(found_visible_wall);
 }
 
+test "FOV: floor visibility is symmetric around blockers" {
+    const lines = [_][]const u8{
+        "############",
+        "##....#....#",
+        "#.##.......#",
+        "#.....#....#",
+        "##.##...####",
+        "#..........#",
+        "##.#.......#",
+        "#.#........#",
+        "#.......#..#",
+        "##.........#",
+        "#.#.#.....##",
+        "############",
+    };
+    var map = mapFromLines(&lines);
+
+    var from_a = visibility.VisibilityMap.init();
+    from_a.compute(&map, 2, 1, 8);
+
+    var from_b = visibility.VisibilityMap.init();
+    from_b.compute(&map, 7, 3, 8);
+
+    try std.testing.expectEqual(from_a.isVisible(7, 3), from_b.isVisible(2, 1));
+}
+
+test "FOV: line-clear floor target matches combat line of sight" {
+    const lines = [_][]const u8{
+        "############",
+        "#....#...#.#",
+        "#..#.......#",
+        "#......##..#",
+        "##...#.....#",
+        "#.#.#.....##",
+        "#...#....#.#",
+        "##....#....#",
+        "#........###",
+        "#.#..#.....#",
+        "##....#....#",
+        "############",
+    };
+    var map = mapFromLines(&lines);
+
+    var vm = visibility.VisibilityMap.init();
+    vm.compute(&map, 7, 2, 8);
+
+    try std.testing.expect(vm.isVisible(4, 7));
+    try std.testing.expectEqual(vm.isVisible(4, 7), combat.hasLineOfSight(&map, 7, 2, 4, 7));
+}
+
 // ---------------------------------------------------------------------------
 // M3 Alert level tests
 // ---------------------------------------------------------------------------
@@ -487,4 +538,16 @@ test "alert_level: raiseAlert clamps to 100" {
 
     run.raiseAlert(60);
     try std.testing.expectEqual(@as(u8, 100), run.alert_level);
+}
+
+fn mapFromLines(lines: []const []const u8) map_mod.Map {
+    var map = map_mod.Map.filled(tile_mod.Tile.floor());
+    for (lines, 0..) |line, y| {
+        for (line, 0..) |ch, x| {
+            if (ch == '#') {
+                map.set(x, y, tile_mod.Tile.wall());
+            }
+        }
+    }
+    return map;
 }

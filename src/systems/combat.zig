@@ -2,6 +2,7 @@ const std = @import("std");
 const ids = @import("../ids.zig");
 const map_mod = @import("../world/map.zig");
 const RunState = @import("../run_state.zig").RunState;
+const visibility_mod = @import("../visibility.zig");
 
 pub const PLAYER_ACCURACY: u32 = 75;
 pub const PLAYER_EVASION: u32 = 15;
@@ -47,40 +48,9 @@ pub fn playerMeleeAttack(run: *RunState, target_id: ids.ActorId) !MeleeResult {
     };
 }
 
-/// Returns true if there is clear line of sight from (x0,y0) to (x1,y1).
-/// A tile blocks LoS if it blocks movement (walls only for now).
-/// The start and end tiles are not checked for blocking.
+/// Returns true if the shared visibility model can see from (x0,y0) to (x1,y1).
 pub fn hasLineOfSight(map: *const map_mod.Map, x0: i32, y0: i32, x1: i32, y1: i32) bool {
-    var dx = x1 - x0;
-    var dy = y1 - y0;
-    const sx: i32 = if (dx > 0) 1 else if (dx < 0) -1 else 0;
-    const sy: i32 = if (dy > 0) 1 else if (dy < 0) -1 else 0;
-    if (dx < 0) dx = -dx;
-    if (dy < 0) dy = -dy;
-
-    var x = x0;
-    var y = y0;
-    var err = dx - dy;
-
-    while (true) {
-        // Stop at the destination — don't check it for blocking
-        if (x == x1 and y == y1) return true;
-
-        // Check intermediate tiles (skip the start tile on first iteration)
-        if (!(x == x0 and y == y0)) {
-            if (map.isBlockedAt(x, y)) return false;
-        }
-
-        const e2 = err * 2;
-        if (e2 > -dy) {
-            err -= dy;
-            x += sx;
-        }
-        if (e2 < dx) {
-            err += dx;
-            y += sy;
-        }
-    }
+    return visibility_mod.hasLineOfSight(map, x0, y0, x1, y1);
 }
 
 /// Ranged attack from player to target. Requires line of sight.
@@ -190,4 +160,39 @@ test "hasLineOfSight: wall at start or end does not block" {
     var map2 = map_mod.Map.filled(tile_mod.Tile.floor());
     map2.set(5, 0, tile_mod.Tile.wall());
     try testing.expect(hasLineOfSight(&map2, 0, 0, 5, 0));
+}
+
+test "hasLineOfSight: matches visibility map for line-clear target" {
+    const lines = [_][]const u8{
+        "############",
+        "#....#...#.#",
+        "#..#.......#",
+        "#......##..#",
+        "##...#.....#",
+        "#.#.#.....##",
+        "#...#....#.#",
+        "##....#....#",
+        "#........###",
+        "#.#..#.....#",
+        "##....#....#",
+        "############",
+    };
+    var map = mapFromLines(&lines);
+
+    var vm = visibility_mod.VisibilityMap.init();
+    vm.compute(&map, 7, 2, 8);
+
+    try testing.expectEqual(vm.isVisible(4, 7), hasLineOfSight(&map, 7, 2, 4, 7));
+}
+
+fn mapFromLines(lines: []const []const u8) map_mod.Map {
+    var map = map_mod.Map.filled(tile_mod.Tile.floor());
+    for (lines, 0..) |line, y| {
+        for (line, 0..) |ch, x| {
+            if (ch == '#') {
+                map.set(x, y, tile_mod.Tile.wall());
+            }
+        }
+    }
+    return map;
 }

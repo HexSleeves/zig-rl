@@ -25,33 +25,29 @@ pub const VisibilityMap = struct {
         return self.explored[idx(x, y)];
     }
 
-    /// Recompute FOV from (ox, oy) with given radius using recursive shadowcasting.
+    /// Recompute FOV from (ox, oy) with given radius using symmetric shadowcasting.
     pub fn compute(self: *VisibilityMap, map: *const map_mod.Map, ox: i32, oy: i32, radius: u32) void {
-        // Clear visible
         for (&self.visible) |*v| v.* = false;
 
-        // Mark origin visible and explored
-        if (map.inBounds(ox, oy)) {
-            self.visible[idx(ox, oy)] = true;
-            self.explored[idx(ox, oy)] = true;
-        }
+        if (!map.inBounds(ox, oy)) return;
 
-        // Process all 8 octants
-        // Octant transforms: (xx, xy, yx, yy)
-        const octants = [8][4]i32{
-            .{ 1,  0,  0,  1 },
-            .{ 0,  1,  1,  0 },
-            .{ 0, -1,  1,  0 },
-            .{ -1, 0,  0,  1 },
-            .{ -1, 0,  0, -1 },
-            .{ 0, -1, -1,  0 },
-            .{ 0,  1, -1,  0 },
-            .{ 1,  0,  0, -1 },
-        };
+        self.markVisible(ox, oy);
+        if (radius == 0) return;
 
-        for (octants) |o| {
-            castLight(self, map, ox, oy, radius, 1, 1.0, 0.0, o[0], o[1], o[2], o[3]);
+        var quadrant: u3 = 0;
+        while (quadrant < 4) : (quadrant += 1) {
+            scan(self, map, ox, oy, radius, quadrant, Row{
+                .depth = 1,
+                .start_slope = Slope.init(-1, 1),
+                .end_slope = Slope.init(1, 1),
+            });
         }
+    }
+
+    fn markVisible(self: *VisibilityMap, x: i32, y: i32) void {
+        const i = idx(x, y);
+        self.visible[i] = true;
+        self.explored[i] = true;
     }
 };
 
@@ -59,70 +55,142 @@ inline fn idx(x: i32, y: i32) usize {
     return @intCast(y * @as(i32, config.map_width) + x);
 }
 
-/// Recursive shadowcasting for one octant.
-/// xx, xy, yx, yy are the octant transform matrix.
-fn castLight(
-    vis: *VisibilityMap,
-    map: *const map_mod.Map,
-    ox: i32,
-    oy: i32,
-    radius: u32,
-    row: i32,
-    start_slope_in: f32,
-    end_slope: f32,
-    xx: i32,
-    xy: i32,
-    yx: i32,
-    yy: i32,
-) void {
-    if (start_slope_in < end_slope) return;
+pub fn hasLineOfSight(map: *const map_mod.Map, x0: i32, y0: i32, x1: i32, y1: i32) bool {
+    if (!map.inBounds(x0, y0) or !map.inBounds(x1, y1)) return false;
+    var vm = VisibilityMap.init();
+    vm.compute(map, x0, y0, @intCast(config.map_width + config.map_height));
+    return vm.isVisible(x1, y1);
+}
 
-    const r2 = @as(i32, @intCast(radius * radius));
-    var new_start: f32 = 0.0;
-    var start_slope = start_slope_in;
-    var blocked = false;
-    var j = row;
+const Slope = struct {
+    num: i32,
+    den: i32,
 
-    while (j <= @as(i32, @intCast(radius)) and !blocked) : (j += 1) {
-        var dx: i32 = -j;
-        while (dx <= 0) : (dx += 1) {
-            const dy: i32 = -j;
-            // Left and right slopes for this cell
-            const l_slope: f32 = (@as(f32, @floatFromInt(dx)) - 0.5) / (@as(f32, @floatFromInt(dy)) + 0.5);
-            const r_slope: f32 = (@as(f32, @floatFromInt(dx)) + 0.5) / (@as(f32, @floatFromInt(dy)) - 0.5);
-
-            if (start_slope < r_slope) continue;
-            if (end_slope > l_slope) break;
-
-            // Transform to map coordinates
-            const mx: i32 = ox + dx * xx + dy * xy;
-            const my: i32 = oy + dx * yx + dy * yy;
-
-            // Check radius (distance squared)
-            if (dx * dx + dy * dy <= r2 and map.inBounds(mx, my)) {
-                const i = idx(mx, my);
-                vis.visible[i] = true;
-                vis.explored[i] = true;
-            }
-
-            if (blocked) {
-                if (!map.inBounds(mx, my) or map.get(@intCast(mx), @intCast(my)).blocks_sight) {
-                    new_start = r_slope;
-                } else {
-                    blocked = false;
-                }
-            } else {
-                if (map.inBounds(mx, my) and map.get(@intCast(mx), @intCast(my)).blocks_sight and j < @as(i32, @intCast(radius))) {
-                    blocked = true;
-                    castLight(vis, map, ox, oy, radius, j + 1, start_slope, l_slope, xx, xy, yx, yy);
-                    new_start = r_slope;
-                }
-            }
-        }
-        if (blocked) {
-            start_slope = new_start;
-        }
+    fn init(num: i32, den: i32) Slope {
+        std.debug.assert(den > 0);
+        return .{ .num = num, .den = den };
     }
+};
+
+const Row = struct {
+    depth: i32,
+    start_slope: Slope,
+    end_slope: Slope,
+
+    fn minCol(self: Row) i32 {
+        return roundTiesUp(@as(i64, self.depth) * self.start_slope.num, self.start_slope.den);
+    }
+
+    fn maxCol(self: Row) i32 {
+        return roundTiesDown(@as(i64, self.depth) * self.end_slope.num, self.end_slope.den);
+    }
+
+    fn next(self: Row) Row {
+        return .{
+            .depth = self.depth + 1,
+            .start_slope = self.start_slope,
+            .end_slope = self.end_slope,
+        };
+    }
+};
+
+const ScanTile = struct {
+    depth: i32,
+    col: i32,
+};
+
+fn scan(vis: *VisibilityMap, map: *const map_mod.Map, ox: i32, oy: i32, radius: u32, quadrant: u3, row_in: Row) void {
+    if (row_in.depth > @as(i32, @intCast(radius))) return;
+
+    var row = row_in;
+    var prev_tile: ?ScanTile = null;
+    var col = row.minCol();
+    const max_col = row.maxCol();
+    while (col <= max_col) : (col += 1) {
+        const tile = ScanTile{ .depth = row.depth, .col = col };
+        if (isWall(map, ox, oy, radius, quadrant, tile) or isSymmetric(row, tile)) {
+            reveal(vis, map, ox, oy, radius, quadrant, tile);
+        }
+
+        if (isWall(map, ox, oy, radius, quadrant, prev_tile) and isFloor(map, ox, oy, radius, quadrant, tile)) {
+            row.start_slope = slope(tile);
+        }
+
+        if (isFloor(map, ox, oy, radius, quadrant, prev_tile) and isWall(map, ox, oy, radius, quadrant, tile)) {
+            var next_row = row.next();
+            next_row.end_slope = slope(tile);
+            scan(vis, map, ox, oy, radius, quadrant, next_row);
+        }
+
+        prev_tile = tile;
+    }
+
+    if (isFloor(map, ox, oy, radius, quadrant, prev_tile)) {
+        scan(vis, map, ox, oy, radius, quadrant, row.next());
+    }
+}
+
+fn reveal(vis: *VisibilityMap, map: *const map_mod.Map, ox: i32, oy: i32, radius: u32, quadrant: u3, tile: ScanTile) void {
+    const pos = transform(ox, oy, quadrant, tile);
+    if (map.inBounds(pos[0], pos[1]) and inRadius(ox, oy, pos[0], pos[1], radius)) {
+        vis.markVisible(pos[0], pos[1]);
+    }
+}
+
+fn isWall(map: *const map_mod.Map, ox: i32, oy: i32, radius: u32, quadrant: u3, maybe_tile: ?ScanTile) bool {
+    const tile = maybe_tile orelse return false;
+    const pos = transform(ox, oy, quadrant, tile);
+    if (!map.inBounds(pos[0], pos[1]) or !inRadius(ox, oy, pos[0], pos[1], radius)) return false;
+    return map.get(@intCast(pos[0]), @intCast(pos[1])).blocks_sight;
+}
+
+fn isFloor(map: *const map_mod.Map, ox: i32, oy: i32, radius: u32, quadrant: u3, maybe_tile: ?ScanTile) bool {
+    const tile = maybe_tile orelse return false;
+    return !isWall(map, ox, oy, radius, quadrant, tile);
+}
+
+fn transform(ox: i32, oy: i32, quadrant: u3, tile: ScanTile) [2]i32 {
+    return switch (quadrant) {
+        0 => .{ ox + tile.col, oy - tile.depth },
+        1 => .{ ox + tile.depth, oy + tile.col },
+        2 => .{ ox + tile.col, oy + tile.depth },
+        3 => .{ ox - tile.depth, oy + tile.col },
+        else => unreachable,
+    };
+}
+
+fn inRadius(ox: i32, oy: i32, x: i32, y: i32, radius: u32) bool {
+    const dx = x - ox;
+    const dy = y - oy;
+    const r: i32 = @intCast(radius);
+    return dx * dx + dy * dy <= r * r;
+}
+
+fn slope(tile: ScanTile) Slope {
+    return Slope.init(2 * tile.col - 1, 2 * tile.depth);
+}
+
+fn isSymmetric(row: Row, tile: ScanTile) bool {
+    return compareIntToScaledSlope(tile.col, row.depth, row.start_slope) >= 0 and
+        compareIntToScaledSlope(tile.col, row.depth, row.end_slope) <= 0;
+}
+
+fn compareIntToScaledSlope(value: i32, depth: i32, s: Slope) i32 {
+    const lhs = @as(i64, value) * s.den;
+    const rhs = @as(i64, depth) * s.num;
+    if (lhs < rhs) return -1;
+    if (lhs > rhs) return 1;
+    return 0;
+}
+
+fn roundTiesUp(num: i64, den: i32) i32 {
+    const d = @as(i64, den) * 2;
+    return @intCast(@divFloor(num * 2 + den, d));
+}
+
+fn roundTiesDown(num: i64, den: i32) i32 {
+    const d = @as(i64, den) * 2;
+    return @intCast(-@divFloor(-(num * 2 - den), d));
 }
 
 // --- Tests ---
@@ -176,4 +244,65 @@ test "compute: wall adjacent to origin is visible but blocks further sight" {
     try std.testing.expect(vm.isVisible(6, 5));
     // Tile directly behind the wall (7,5) should NOT be visible
     try std.testing.expect(!vm.isVisible(7, 5));
+}
+
+test "compute: floor visibility is symmetric around blockers" {
+    const lines = [_][]const u8{
+        "############",
+        "##....#....#",
+        "#.##.......#",
+        "#.....#....#",
+        "##.##...####",
+        "#..........#",
+        "##.#.......#",
+        "#.#........#",
+        "#.......#..#",
+        "##.........#",
+        "#.#.#.....##",
+        "############",
+    };
+    var map = mapFromLines(&lines);
+
+    var from_a = VisibilityMap.init();
+    from_a.compute(&map, 2, 1, 8);
+
+    var from_b = VisibilityMap.init();
+    from_b.compute(&map, 7, 3, 8);
+
+    try std.testing.expectEqual(from_a.isVisible(7, 3), from_b.isVisible(2, 1));
+}
+
+test "compute: line-clear floor target is visible" {
+    const lines = [_][]const u8{
+        "############",
+        "#....#...#.#",
+        "#..#.......#",
+        "#......##..#",
+        "##...#.....#",
+        "#.#.#.....##",
+        "#...#....#.#",
+        "##....#....#",
+        "#........###",
+        "#.#..#.....#",
+        "##....#....#",
+        "############",
+    };
+    var map = mapFromLines(&lines);
+
+    var vm = VisibilityMap.init();
+    vm.compute(&map, 7, 2, 8);
+    try std.testing.expect(vm.isVisible(4, 7));
+}
+
+fn mapFromLines(lines: []const []const u8) map_mod.Map {
+    const tile_mod = @import("world/tile.zig");
+    var map = map_mod.Map.filled(tile_mod.Tile.floor());
+    for (lines, 0..) |line, y| {
+        for (line, 0..) |ch, x| {
+            if (ch == '#') {
+                map.set(x, y, tile_mod.Tile.wall());
+            }
+        }
+    }
+    return map;
 }
