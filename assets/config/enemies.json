@@ -1,0 +1,6 @@
+[
+  {"id":0, "name":"guard",    "glyph":"g", "hp":10, "armor":0, "accuracy":70, "evasion":10, "speed":100, "awareness":8},
+  {"id":1, "name":"sentinel", "glyph":"s", "hp":15, "armor":2, "accuracy":75, "evasion":8,  "speed":80,  "awareness":10},
+  {"id":2, "name":"rogue",    "glyph":"r", "hp":8,  "armor":0, "accuracy":65, "evasion":15, "speed":110, "awareness":7},
+  {"id":3, "name":"enforcer", "glyph":"e", "hp":20, "armor":3, "accuracy":80, "evasion":5,  "speed":70,  "awareness":12}
+]

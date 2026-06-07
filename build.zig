@@ -67,4 +67,34 @@ pub fn build(b: *std.Build) void {
 
     const zgd_style_test_step = b.step("roguelike-test", "zig-gamedev-style alias for running simulation tests");
     zgd_style_test_step.dependOn(&run_unit_tests.step);
+
+    // ── validate: check assets/config/*.json content -------------------
+    const validate_mod = b.createModule(.{
+        .root_source_file = b.path("src/tools/validate.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    validate_mod.addImport("zig_rl", lib_mod);
+    const validate_exe = b.addExecutable(.{
+        .name = "validate",
+        .root_module = validate_mod,
+    });
+    const run_validate = b.addRunArtifact(validate_exe);
+    const validate_step = b.step("validate", "Validate assets/config JSON content files");
+    validate_step.dependOn(&run_validate.step);
+
+    // ── simulate: run 1000 floor generations and report stats ----------
+    const simulate_mod = b.createModule(.{
+        .root_source_file = b.path("src/tools/simulate.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    simulate_mod.addImport("zig_rl", lib_mod);
+    const simulate_exe = b.addExecutable(.{
+        .name = "simulate",
+        .root_module = simulate_mod,
+    });
+    const run_simulate = b.addRunArtifact(simulate_exe);
+    const simulate_step = b.step("simulate", "Simulate 1000 floor generations and report balance stats");
+    simulate_step.dependOn(&run_simulate.step);
 }
